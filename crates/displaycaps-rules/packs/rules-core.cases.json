@@ -1,0 +1,27 @@
+{
+  "cases": [
+    {
+      "name": "flatpak without dri",
+      "facts": {
+        "g.sandbox.kind": "flatpak",
+        "g.sandbox.required_missing": ["--device=dri"],
+        "g.sandbox.required_fixes": ["flatpak override --user --device=dri org.example.Player"]
+      },
+      "fires": ["SANDBOX_PERMISSION_MISSING"]
+    },
+    {
+      "name": "sandbox with only optional permissions missing",
+      "facts": {
+        "g.sandbox.kind": "flatpak",
+        "g.sandbox.required_missing": [],
+        "g.sandbox.required_fixes": []
+      },
+      "silent": ["SANDBOX_PERMISSION_MISSING"]
+    },
+    {
+      "name": "no sandbox",
+      "facts": { "g.sandbox.kind": "none", "g.sandbox.required_missing": [] },
+      "silent": ["SANDBOX_PERMISSION_MISSING"]
+    }
+  ]
+}

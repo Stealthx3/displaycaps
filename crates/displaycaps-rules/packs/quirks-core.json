@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "pack": "displaycaps-quirks-core",
+  "entries": [
+    {
+      "id": "lg-cx-zero-peak-luminance",
+      "description": "LG CX and related LG TVs report a peak luminance of 0 nits in their HDR static metadata block, so the value can't be used as the display's real peak",
+      "reference": "KDE bug 495557",
+      "match": {
+        "manufacturer": "GSM",
+        "model_name_contains": ["LG TV"]
+      },
+      "effects": [
+        { "effect": "note", "text": "The EDID reports 0 nits peak luminance (KDE bug 495557); treat the peak luminance as unknown rather than as 0." }
+      ]
+    }
+  ]
+}

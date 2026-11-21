@@ -16,7 +16,7 @@ Open items (not phase tasks):
 
 - [ ] **1.1** Adopt the shared standards: repo layout, progress page, phone alerts, VM lab, usage plan, journal
 - [x] **1.2** Cargo workspace with seven crates (model, parse, link, backends, rules, ffi, cli), pinned toolchain, rustfmt/clippy, SPDX headers, `deny.toml`
-- [ ] **1.3** Copy AudioCaps v1.0.0's generic code with provenance headers, renamed for DisplayCaps, with its tests
+- [x] **1.3** Copy AudioCaps v1.0.0's generic code with provenance headers, renamed for DisplayCaps, with its tests
 - [x] **1.4** Data model: display endpoints, presentation paths, layers, link state, path reports, findings; JSON schema v1
 - [ ] **1.5** Capture tool `displaycaps capture`: passive, read-only, EDID serials zeroed
 - [ ] **1.6** Captures: lab VMs (virtio-gpu with KWin, GNOME and Sway), workstation, HTPC

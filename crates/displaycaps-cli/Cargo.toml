@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Adapted from AudioCaps v1.0.0 (commit 049d053) crates/audiocaps-cli/Cargo.toml.
+[package]
+name = "displaycaps-cli"
+description = "DisplayCaps command-line tool: probe, capture, replay, schema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "displaycaps"
+path = "src/main.rs"
+
+[dependencies]
+displaycaps-model.workspace = true
+displaycaps-parse.workspace = true
+displaycaps-backends.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+regex.workspace = true
+tar.workspace = true
+flate2.workspace = true
+
+[dev-dependencies]
+expect-test.workspace = true
+
+[lints]
+workspace = true
