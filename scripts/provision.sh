@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: LGPL-2.1-or-later
-# Adapted from AudioCaps v1.0.0 scripts/provision.sh (commit 049d053): display build deps
+# Adapted from AudioCaps v1.0.0 (commit 049d053) scripts/provision.sh: display build deps
 # instead of audio ones.
 # provision.sh — idempotent setup of the build guest (lab-displaycaps-main). Runs inside the guest only.
 # Usage: scripts/lab.sh run 'bash scripts/provision.sh'
