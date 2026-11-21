@@ -99,7 +99,10 @@ written; raise any change at a gate.
 - Phone alerts: see PHONE-ALERTS-STANDARD; hooks installed, check with
   `node scripts/phone-alerts.mjs check`.
 - Progress: tick `docs/PLAN.md` in the same commit as the work, then run
-  `node scripts/progress.mjs` and `node scripts/repo-check.mjs progress`.
+  `node scripts/progress.mjs` and `node scripts/repo-check.mjs progress`. The
+  page is published by GitHub Pages: https://stealthx3.github.io/displaycaps/
+- PII: see PII-REDACTION-STANDARD; hooks block commits with personal values.
+  Scan with `node scripts/pii-scan.mjs scan` before every push or publish.
 - Usage plan: `docs/USAGE-PLAN.md` (read the handoff note first). Append one
   line per session to `docs/postmortem/JOURNAL.md`.
 

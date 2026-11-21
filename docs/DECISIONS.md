@@ -23,3 +23,5 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-21** · decision · Rewrite the local, never-pushed history to remove personal values before the first push
 - **2026-11-21** · note · Lab host details stay out of docs/LAB.md; real values only in git-ignored docs/LAB.local.md
 - **2026-11-21** · action · Workstation capture run once on the host under check-passive.sh (approved exception): passed; drm_info not installed there, so no KMS dump
+- **2026-11-21** · action · Created the public GitHub repo Stealthx3/displaycaps and published the progress page with GitHub Pages (also deploys from feat/phase-* branches)
+- **2026-11-21** · note · Repo check ignores tests/fixtures/ for folder-name case — _why:_ fixture trees mirror real sysfs names such as card1-HDMI-A-1 _(by claude)_

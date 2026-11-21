@@ -57,6 +57,8 @@ Never two L sessions back to back where limits are tight; Phase 2 is the largest
 
 ## Log
 - 2026-11-21 — Plan created from AudioCaps' plan. Task 1.4 (data model and schema v1) runs in the main thread on the top tier.
+- 2026-11-21 — Copying the backends/rules/cli/ffi crates was delegated to one sonnet agent (≈290k tokens, 11 min); it worked from a scratchpad export of AudioCaps v1.0.0 and its own lab directory.
+- 2026-11-21 — New tools: oracles.sh, parity-vectors.mjs, parity-audiocaps.sh, check-passive.sh (DRM rules), desktop-session.sh.
 
 ## Handoff
-_Updated at each checkpoint._
+Phase 1 at its gate on `feat/phase-1-scaffold-copied-foundation` (pushed; not merged). Open: HTPC capture (needs the maintainer's one-time OK), task 1.6 therefore partial. Next after approval: merge, then phase 2 (EDID video blocks, differential tests against the oracles). Lab: main and desktop guests both shut down; desktop snapshot `desktops` has GNOME/Plasma/Sway.
