@@ -30,8 +30,8 @@ Open items (not phase tasks):
 - [x] **2.2** Colour and HDR: video capability, colorimetry, HDR static and dynamic metadata, Dolby Vision, HDR10+
 - [x] **2.3** HDMI 2.1: full HDMI Forum VSDB and Sink Capability block, DSC, VRR, ALLM
 - [x] **2.4** DisplayID 1.3 and 2.x
-- [ ] **2.5** Sink record and quirk packs
-- [ ] **2.6** Differential tests against both oracles over the corpus; fuzz targets for every block parser
+- [x] **2.5** Sink record and quirk packs
+- [x] **2.6** Differential tests against both oracles over the corpus; fuzz targets for every block parser
 - [ ] **2.7** Gate: corpus agrees with the oracles or every difference is triaged; HTPC TV and receiver identified; fuzz runs clean
 
 ## Phase 3 — sysfs and KMS backend (about 3 weeks)

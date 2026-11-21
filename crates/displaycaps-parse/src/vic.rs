@@ -229,7 +229,10 @@ mod tests {
     #[test]
     fn vic_39_is_exactly_50_hz() {
         let t = vic(39).unwrap();
-        assert_eq!((t.width, t.height, t.interlaced, t.v_total), (1920, 1080, true, 1250));
+        assert_eq!(
+            (t.width, t.height, t.interlaced, t.v_total),
+            (1920, 1080, true, 1250)
+        );
         assert_eq!(t.refresh_millihz, 50_000);
     }
 
