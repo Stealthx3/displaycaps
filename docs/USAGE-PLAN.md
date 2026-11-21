@@ -62,4 +62,4 @@ Never two L sessions back to back where limits are tight; Phase 2 is the largest
 - 2026-11-21 — New tools: oracles.sh, parity-vectors.mjs, parity-audiocaps.sh, check-passive.sh (DRM rules), desktop-session.sh.
 
 ## Handoff
-Phase 1 at its gate on `feat/phase-1-scaffold-copied-foundation` (pushed; not merged). Open: HTPC capture (needs the maintainer's one-time OK), task 1.6 therefore partial. Next after approval: merge, then phase 2 (EDID video blocks, differential tests against the oracles). Lab: main and desktop guests both shut down; desktop snapshot `desktops` has GNOME/Plasma/Sway.
+Phase 1 at its gate on `feat/phase-1-scaffold-copied-foundation` (pushed; not merged). The HTPC is out of scope (lab-simulated tests only); 2.7 and 4.3 need simulated equivalents. Next after approval: merge, then phase 2 (EDID video blocks, differential tests against the oracles). Lab: main and desktop guests both shut down; desktop snapshot `desktops` has GNOME/Plasma/Sway.

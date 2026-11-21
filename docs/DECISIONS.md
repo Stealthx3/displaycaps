@@ -27,3 +27,4 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-21** · note · Repo check ignores tests/fixtures/ for folder-name case — _why:_ fixture trees mirror real sysfs names such as card1-HDMI-A-1 _(by claude)_
 - **2026-11-21** · action · Rewrote the pushed phase-1 branch history to replace the workstation GPU device UUIDs in a fixture, and force-pushed — _why:_ a per-board hardware id leaked into commit 24c5fcd
 - **2026-11-21** · note · GitHub still serves the old commit by its SHA until its own garbage collection; a purge needs a GitHub Support request
+- **2026-11-21** · decision · Skip the HTPC: no capture or test on the production rig; use simulated tests in the lab only — _why:_ maintainer's instruction at the phase 1 gate
