@@ -1,0 +1,6377 @@
+{
+  "$id": "https://stealthx3.github.io/displaycaps/schema/displaycaps-snapshot-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DisplayCaps snapshot",
+  "description": "The result of one probe. Contains only what the scope asked for.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "description": "Schema version, e.g. `1.0.0`.",
+      "type": "string"
+    },
+    "generation": {
+      "description": "Generation number; increases with each new snapshot from the same probe context.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "taken_at_ms": {
+      "description": "When the probe ran, in milliseconds since the Unix epoch (capture time for fixtures).",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "source": {
+      "description": "What was probed.",
+      "$ref": "#/$defs/SnapshotSource"
+    },
+    "scope": {
+      "description": "The scope that was asked for.",
+      "$ref": "#/$defs/ProbeScope"
+    },
+    "redaction": {
+      "description": "Whether sensitive values have been redacted, and how.",
+      "$ref": "#/$defs/RedactionPolicy"
+    },
+    "layers": {
+      "description": "System-wide availability of each layer in scope.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SystemLayer"
+      }
+    },
+    "environment": {
+      "description": "Environment layer, when in scope.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EnvironmentInfo"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "endpoints": {
+      "description": "Endpoints in scope, sorted by id.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Endpoint"
+      }
+    },
+    "content": {
+      "description": "What the application said it intends to show, when it said so (inputs to path reports,\nfindings and recommendations).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContentRequest"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recommendations": {
+      "description": "Recommendations for that content, when the application asked for them.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Recommendation"
+      }
+    },
+    "findings": {
+      "description": "Findings, when in scope.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Finding"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "generation",
+    "taken_at_ms",
+    "source",
+    "scope",
+    "redaction",
+    "layers",
+    "endpoints"
+  ],
+  "x-displaycaps-schema-version": "1.0.0",
+  "$defs": {
+    "SnapshotSource": {
+      "description": "What a snapshot was taken from.",
+      "oneOf": [
+        {
+          "description": "The running system.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "live"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "A captured fixture tree.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "fixture"
+            },
+            "name": {
+              "description": "Fixture name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "ProbeScope": {
+      "description": "What a probe may read and report. Build it with [`ProbeScope::nothing`] and the `with_*`\nmethods, or start from [`ProbeScope::everything`].",
+      "type": "object",
+      "properties": {
+        "endpoint_classes": {
+          "description": "Endpoint classes to consider.",
+          "$ref": "#/$defs/Selection"
+        },
+        "endpoints": {
+          "description": "Specific endpoints (by id) to consider.",
+          "$ref": "#/$defs/Selection2"
+        },
+        "layers": {
+          "description": "Layers to read.",
+          "$ref": "#/$defs/Selection3"
+        },
+        "fields": {
+          "description": "Field groups to report.",
+          "$ref": "#/$defs/Selection4"
+        },
+        "presentation_paths": {
+          "description": "Presentation paths to compute effective sets and path reports for.",
+          "$ref": "#/$defs/Selection5"
+        }
+      },
+      "required": [
+        "endpoint_classes",
+        "endpoints",
+        "layers",
+        "fields",
+        "presentation_paths"
+      ]
+    },
+    "Selection": {
+      "description": "A selection of items: everything, or only the listed ones. An empty `Only` selects nothing.",
+      "oneOf": [
+        {
+          "description": "Every item.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "all"
+            }
+          },
+          "required": [
+            "select"
+          ]
+        },
+        {
+          "description": "Only these items.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "only"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EndpointClass"
+              }
+            }
+          },
+          "required": [
+            "select",
+            "items"
+          ]
+        }
+      ]
+    },
+    "EndpointClass": {
+      "description": "Endpoint class.",
+      "oneOf": [
+        {
+          "description": "External connectors: HDMI, DisplayPort, USB-C alt mode, DVI, VGA (also through adapters,\ndocks and MST hubs; one endpoint per sink).",
+          "type": "string",
+          "const": "external"
+        },
+        {
+          "description": "Internal panels: eDP, LVDS, DSI.",
+          "type": "string",
+          "const": "internal"
+        },
+        {
+          "description": "Virtual outputs: VM displays, headless outputs, network streaming, writeback.",
+          "type": "string",
+          "const": "virtual"
+        }
+      ]
+    },
+    "Selection2": {
+      "description": "A selection of items: everything, or only the listed ones. An empty `Only` selects nothing.",
+      "oneOf": [
+        {
+          "description": "Every item.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "all"
+            }
+          },
+          "required": [
+            "select"
+          ]
+        },
+        {
+          "description": "Only these items.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "only"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EndpointId"
+              }
+            }
+          },
+          "required": [
+            "select",
+            "items"
+          ]
+        }
+      ]
+    },
+    "EndpointId": {
+      "description": "Stable endpoint identifier, e.g. `drm:card1-HDMI-A-1`. Stable across probes on the same system\nwhile the hardware and configuration stay the same.",
+      "type": "string"
+    },
+    "Selection3": {
+      "description": "A selection of items: everything, or only the listed ones. An empty `Only` selects nothing.",
+      "oneOf": [
+        {
+          "description": "Every item.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "all"
+            }
+          },
+          "required": [
+            "select"
+          ]
+        },
+        {
+          "description": "Only these items.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "only"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/LayerKind"
+              }
+            }
+          },
+          "required": [
+            "select",
+            "items"
+          ]
+        }
+      ]
+    },
+    "LayerKind": {
+      "description": "The eight layers DisplayCaps reads, from the far end of the cable to the app's sandbox.",
+      "oneOf": [
+        {
+          "description": "The connected sink and anything between it and the GPU (EDID; DDC/CI and CEC opt-in).",
+          "type": "string",
+          "const": "sink_chain"
+        },
+        {
+          "description": "Host hardware: GPU, PCI ids, connector types, link rates the hardware supports.",
+          "type": "string",
+          "const": "host_hardware"
+        },
+        {
+          "description": "Kernel driver: driver name, module parameters (e.g. the amdgpu feature mask), kernel.",
+          "type": "string",
+          "const": "kernel_driver"
+        },
+        {
+          "description": "KMS state read with read-only ioctls: active mode, max bpc, colorspace, HDR metadata, VRR.",
+          "type": "string",
+          "const": "kms"
+        },
+        {
+          "description": "The HDMI/DP link, worked out from the layers above (always inferred).",
+          "type": "string",
+          "const": "link"
+        },
+        {
+          "description": "The compositor: HDR, wide colour, image description, VRR policy, scale (Wayland or X11).",
+          "type": "string",
+          "const": "compositor"
+        },
+        {
+          "description": "Hardware video decode (opt-in): VA-API and Vulkan Video profiles.",
+          "type": "string",
+          "const": "decode"
+        },
+        {
+          "description": "Environment: session type, sandbox, permissions, distro, driver sources.",
+          "type": "string",
+          "const": "environment"
+        }
+      ]
+    },
+    "Selection4": {
+      "description": "A selection of items: everything, or only the listed ones. An empty `Only` selects nothing.",
+      "oneOf": [
+        {
+          "description": "Every item.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "all"
+            }
+          },
+          "required": [
+            "select"
+          ]
+        },
+        {
+          "description": "Only these items.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "only"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/FieldGroup"
+              }
+            }
+          },
+          "required": [
+            "select",
+            "items"
+          ]
+        }
+      ]
+    },
+    "FieldGroup": {
+      "description": "Groups of fields an application can ask for.",
+      "oneOf": [
+        {
+          "description": "Endpoint identity, names, connector type and correlation keys.",
+          "type": "string",
+          "const": "identity"
+        },
+        {
+          "description": "Modes: resolution, refresh, timing, VICs, preferred mode.",
+          "type": "string",
+          "const": "modes"
+        },
+        {
+          "description": "Variable refresh rate range and state.",
+          "type": "string",
+          "const": "vrr"
+        },
+        {
+          "description": "Colour formats (RGB, YCbCr 4:4:4/4:2:2/4:2:0) and bit depths.",
+          "type": "string",
+          "const": "color_formats"
+        },
+        {
+          "description": "HDR: transfer functions, static and dynamic metadata, luminance.",
+          "type": "string",
+          "const": "hdr"
+        },
+        {
+          "description": "Colorimetry (BT.2020, DCI-P3, xvYCC, ...).",
+          "type": "string",
+          "const": "colorimetry"
+        },
+        {
+          "description": "Quantization range (limited or full).",
+          "type": "string",
+          "const": "quantization"
+        },
+        {
+          "description": "Link limits and link state: TMDS clock, FRL, DP rates, DSC.",
+          "type": "string",
+          "const": "link"
+        },
+        {
+          "description": "Hardware decode profiles (only filled by the opt-in decode check).",
+          "type": "string",
+          "const": "decode"
+        },
+        {
+          "description": "Sink record (identity, video capabilities, devices in between, quirks).",
+          "type": "string",
+          "const": "sink"
+        },
+        {
+          "description": "Effective sets per presentation path.",
+          "type": "string",
+          "const": "effective"
+        },
+        {
+          "description": "Path reports with hops.",
+          "type": "string",
+          "const": "paths"
+        },
+        {
+          "description": "Diagnostic findings.",
+          "type": "string",
+          "const": "findings"
+        },
+        {
+          "description": "Driver state: driver, module parameters, kernel.",
+          "type": "string",
+          "const": "driver"
+        },
+        {
+          "description": "Host hardware detail: GPU, PCI ids, connectors.",
+          "type": "string",
+          "const": "hardware"
+        },
+        {
+          "description": "Compositor state: HDR and wide-colour switches, image description, scale, VRR policy.",
+          "type": "string",
+          "const": "compositor"
+        }
+      ]
+    },
+    "Selection5": {
+      "description": "A selection of items: everything, or only the listed ones. An empty `Only` selects nothing.",
+      "oneOf": [
+        {
+          "description": "Every item.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "all"
+            }
+          },
+          "required": [
+            "select"
+          ]
+        },
+        {
+          "description": "Only these items.",
+          "type": "object",
+          "properties": {
+            "select": {
+              "type": "string",
+              "const": "only"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PresentationPath"
+              }
+            }
+          },
+          "required": [
+            "select",
+            "items"
+          ]
+        }
+      ]
+    },
+    "PresentationPath": {
+      "description": "How an application puts pictures on the screen. The effective set differs per path.",
+      "oneOf": [
+        {
+          "description": "A Wayland surface with a color-management-v1 image description (the HDR path on Wayland).",
+          "type": "string",
+          "const": "wayland_color_managed"
+        },
+        {
+          "description": "A plain Wayland surface (sRGB, SDR).",
+          "type": "string",
+          "const": "wayland"
+        },
+        {
+          "description": "An X11 window (SDR; no HDR path for apps).",
+          "type": "string",
+          "const": "x11"
+        },
+        {
+          "description": "Direct KMS: the app is DRM master (kiosk, Gamescope session) and sets modes itself.",
+          "type": "string",
+          "const": "direct_kms"
+        }
+      ]
+    },
+    "RedactionPolicy": {
+      "description": "Redaction settings for an export. The default redacts everything.",
+      "type": "object",
+      "properties": {
+        "serials": {
+          "description": "Serial numbers.",
+          "$ref": "#/$defs/RedactionMode"
+        },
+        "device_names": {
+          "description": "Device names.",
+          "$ref": "#/$defs/RedactionMode"
+        }
+      },
+      "required": [
+        "serials",
+        "device_names"
+      ]
+    },
+    "RedactionMode": {
+      "description": "How one kind of sensitive value is exported.",
+      "oneOf": [
+        {
+          "description": "Export in the clear.",
+          "type": "string",
+          "const": "keep"
+        },
+        {
+          "description": "Replace with a stable hash.",
+          "type": "string",
+          "const": "hash"
+        },
+        {
+          "description": "Replace with `redacted`.",
+          "type": "string",
+          "const": "mask"
+        }
+      ]
+    },
+    "SystemLayer": {
+      "description": "Whether a layer could be read on this system at all (independent of endpoints).",
+      "type": "object",
+      "properties": {
+        "layer": {
+          "description": "The layer.",
+          "$ref": "#/$defs/LayerKind"
+        },
+        "availability": {
+          "description": "Whether it could be read.",
+          "$ref": "#/$defs/Availability"
+        }
+      },
+      "required": [
+        "layer",
+        "availability"
+      ]
+    },
+    "Availability": {
+      "description": "Whether a layer could be read.",
+      "oneOf": [
+        {
+          "description": "Fully read.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "read"
+            }
+          },
+          "required": [
+            "state"
+          ]
+        },
+        {
+          "description": "Partly read; see the unknown fields.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "partial"
+            }
+          },
+          "required": [
+            "state"
+          ]
+        },
+        {
+          "description": "Not readable.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Detail, e.g. the missing permission.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "UnknownReason": {
+      "description": "Why a value or layer is unknown.",
+      "oneOf": [
+        {
+          "description": "A sandbox permission or Snap plug is missing.",
+          "type": "string",
+          "const": "not_granted"
+        },
+        {
+          "description": "A required client library is not installed.",
+          "type": "string",
+          "const": "library_missing"
+        },
+        {
+          "description": "The service the value comes from (compositor, D-Bus service) is not running.",
+          "type": "string",
+          "const": "service_not_running"
+        },
+        {
+          "description": "The driver, compositor or service does not expose this information.",
+          "type": "string",
+          "const": "not_exposed"
+        },
+        {
+          "description": "The backend did not answer before its deadline.",
+          "type": "string",
+          "const": "timeout"
+        },
+        {
+          "description": "The source was read but could not be parsed.",
+          "type": "string",
+          "const": "parse_error"
+        },
+        {
+          "description": "Reading the source failed for another reason.",
+          "type": "string",
+          "const": "read_error"
+        },
+        {
+          "description": "The source exists in the plan but this build does not read it yet.",
+          "type": "string",
+          "const": "not_implemented"
+        },
+        {
+          "description": "The value only exists after an opt-in call the application has not made (decode checks,\nDDC/CI, CEC).",
+          "type": "string",
+          "const": "not_requested"
+        },
+        {
+          "description": "Reading it would disturb the display (a forced connector probe, a DDC read, DRM master),\nso it is never read; the value comes from another source or stays unknown.",
+          "type": "string",
+          "const": "would_disturb"
+        },
+        {
+          "description": "No display session (Wayland or X11) is reachable from this process.",
+          "type": "string",
+          "const": "no_session"
+        }
+      ]
+    },
+    "EnvironmentInfo": {
+      "description": "The environment the library runs in.",
+      "type": "object",
+      "properties": {
+        "os": {
+          "description": "Operating system release.",
+          "$ref": "#/$defs/Value"
+        },
+        "kernel": {
+          "description": "Kernel version string.",
+          "$ref": "#/$defs/Value2"
+        },
+        "sandbox": {
+          "description": "Sandbox the app runs in.",
+          "$ref": "#/$defs/Value3"
+        },
+        "session": {
+          "description": "The display session the app runs in.",
+          "$ref": "#/$defs/Value4"
+        }
+      },
+      "required": [
+        "os",
+        "kernel",
+        "sandbox",
+        "session"
+      ]
+    },
+    "Value": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/OsInfo"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "OsInfo": {
+      "description": "Operating system release (from os-release on Linux).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "`ID`, e.g. `debian`.",
+          "type": "string"
+        },
+        "version_id": {
+          "description": "`VERSION_ID`, e.g. `13`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "family": {
+          "description": "Distro family, used to pick remediation hints.",
+          "$ref": "#/$defs/DistroFamily"
+        }
+      },
+      "required": [
+        "id",
+        "family"
+      ]
+    },
+    "DistroFamily": {
+      "description": "Distro families for remediation hints.",
+      "oneOf": [
+        {
+          "description": "Debian, Ubuntu and derivatives.",
+          "type": "string",
+          "const": "debian"
+        },
+        {
+          "description": "Fedora, RHEL and derivatives.",
+          "type": "string",
+          "const": "fedora"
+        },
+        {
+          "description": "Arch and derivatives.",
+          "type": "string",
+          "const": "arch"
+        },
+        {
+          "description": "openSUSE and SUSE.",
+          "type": "string",
+          "const": "suse"
+        },
+        {
+          "description": "Anything else (generic hints).",
+          "type": "string",
+          "const": "other"
+        }
+      ]
+    },
+    "Confidence": {
+      "description": "How a known value was obtained.",
+      "oneOf": [
+        {
+          "description": "Read directly from the system.",
+          "type": "string",
+          "const": "measured"
+        },
+        {
+          "description": "Derived from tables, heuristics, correlation or quirk data.",
+          "type": "string",
+          "const": "inferred"
+        }
+      ]
+    },
+    "Provenance": {
+      "description": "Where and when a value was read.",
+      "type": "object",
+      "properties": {
+        "layer": {
+          "description": "The layer the value belongs to.",
+          "$ref": "#/$defs/LayerKind"
+        },
+        "source": {
+          "description": "The concrete source.",
+          "$ref": "#/$defs/Source"
+        },
+        "read_at_ms": {
+          "description": "When it was read, in milliseconds since the Unix epoch.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "layer",
+        "source",
+        "read_at_ms"
+      ]
+    },
+    "Source": {
+      "description": "The concrete source of a value.",
+      "oneOf": [
+        {
+          "description": "A file, relative to the system root (e.g. `/sys/class/drm/card1-HDMI-A-1/edid`).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "file"
+            },
+            "path": {
+              "description": "Absolute path as seen by the probed system.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ]
+        },
+        {
+          "description": "Output of a command-line tool (only in captures and the CLI).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "command"
+            },
+            "name": {
+              "description": "Command name, e.g. `drm_info`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "description": "A KMS object property read with a read-only ioctl.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "kms_property"
+            },
+            "object": {
+              "description": "The object, e.g. `connector 98` or `crtc 77`.",
+              "type": "string"
+            },
+            "property": {
+              "description": "Property name, e.g. `max bpc`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "object",
+            "property"
+          ]
+        },
+        {
+          "description": "A Wayland protocol event.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "wayland"
+            },
+            "interface": {
+              "description": "Interface, e.g. `wp_color_manager_v1`.",
+              "type": "string"
+            },
+            "event": {
+              "description": "Event or request that delivered the value.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "interface",
+            "event"
+          ]
+        },
+        {
+          "description": "A D-Bus property.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "dbus_property"
+            },
+            "service": {
+              "description": "Bus name, e.g. `org.gnome.Mutter.DisplayConfig`.",
+              "type": "string"
+            },
+            "path": {
+              "description": "Object path.",
+              "type": "string"
+            },
+            "interface": {
+              "description": "Interface name.",
+              "type": "string"
+            },
+            "property": {
+              "description": "Property name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "service",
+            "path",
+            "interface",
+            "property"
+          ]
+        },
+        {
+          "description": "A built-in table (e.g. HDMI TMDS limits).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "table"
+            },
+            "name": {
+              "description": "Table name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "description": "A quirk-data entry.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "quirk"
+            },
+            "id": {
+              "description": "Quirk identifier.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        {
+          "description": "A platform API call.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "api"
+            },
+            "api": {
+              "description": "API, e.g. `libva`.",
+              "type": "string"
+            },
+            "call": {
+              "description": "Call or object, e.g. `vaQueryConfigProfiles`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "api",
+            "call"
+          ]
+        },
+        {
+          "description": "Derived from other values.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "derived"
+            },
+            "from": {
+              "description": "What it was derived from.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "from"
+          ]
+        }
+      ]
+    },
+    "Value2": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "string"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Value3": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/Sandbox"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Sandbox": {
+      "description": "Sandbox type and what it grants.",
+      "oneOf": [
+        {
+          "description": "Not sandboxed.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "Flatpak.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "flatpak"
+            },
+            "granted": {
+              "description": "Granted permissions relevant to display, as written in `/.flatpak-info`.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "missing": {
+              "description": "Permissions the app lacks, with the layers they hide and the fix.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PermissionGap"
+              }
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "Snap.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "snap"
+            },
+            "connected": {
+              "description": "Connected plugs relevant to display (inferred from what the snap can reach).",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "missing": {
+              "description": "Plugs the snap lacks, with the layers they hide and the fix.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PermissionGap"
+              }
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "PermissionGap": {
+      "description": "A sandbox permission the app lacks, with what it hides and the fix.",
+      "type": "object",
+      "properties": {
+        "permission": {
+          "description": "The permission, e.g. `--device=dri`, `hardware-observe` (Snap plug).",
+          "type": "string"
+        },
+        "layers": {
+          "description": "Layers it hides.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LayerKind"
+          }
+        },
+        "fix": {
+          "description": "What the user or packager runs or adds, e.g. `flatpak override --user --device=dri <app>`.",
+          "type": "string"
+        },
+        "required": {
+          "description": "Needed for basic operation (else it only adds detail).",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "permission",
+        "layers",
+        "fix",
+        "required"
+      ]
+    },
+    "Value4": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/SessionInfo"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "SessionInfo": {
+      "description": "The display session.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Wayland, X11 or none.",
+          "$ref": "#/$defs/SessionKind"
+        },
+        "compositor": {
+          "description": "The compositor, when it could be identified.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositorInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protocols": {
+          "description": "Protocols or extensions the session offers that DisplayCaps uses, with versions\n(e.g. `wp_color_manager_v1@1`, `RANDR 1.6`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "SessionKind": {
+      "description": "Session types.",
+      "oneOf": [
+        {
+          "description": "Wayland.",
+          "type": "string",
+          "const": "wayland"
+        },
+        {
+          "description": "X11 (also Xwayland when no Wayland socket is reachable).",
+          "type": "string",
+          "const": "x11"
+        },
+        {
+          "description": "No graphical session (a console, a service, or direct KMS).",
+          "type": "string",
+          "const": "none"
+        }
+      ]
+    },
+    "CompositorInfo": {
+      "description": "What is known about the compositor.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Which compositor.",
+          "$ref": "#/$defs/CompositorKind"
+        },
+        "name": {
+          "description": "Name as reported, e.g. `KWin`.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Version, when reported.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ]
+    },
+    "CompositorKind": {
+      "description": "Compositors with dedicated support.",
+      "oneOf": [
+        {
+          "description": "KDE KWin.",
+          "type": "string",
+          "const": "kwin"
+        },
+        {
+          "description": "GNOME Mutter.",
+          "type": "string",
+          "const": "mutter"
+        },
+        {
+          "description": "A wlroots compositor (Sway, Hyprland's predecessors, labwc, ...).",
+          "type": "string",
+          "const": "wlroots"
+        },
+        {
+          "description": "Hyprland.",
+          "type": "string",
+          "const": "hyprland"
+        },
+        {
+          "description": "Valve Gamescope.",
+          "type": "string",
+          "const": "gamescope"
+        },
+        {
+          "description": "Weston.",
+          "type": "string",
+          "const": "weston"
+        },
+        {
+          "description": "An X11 server (Xorg).",
+          "type": "string",
+          "const": "xorg"
+        },
+        {
+          "description": "Another compositor, identified only by the protocols it offers.",
+          "type": "string",
+          "const": "other"
+        }
+      ]
+    },
+    "Endpoint": {
+      "description": "One display endpoint with everything reported about it (within the probe scope).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Stable identifier.",
+          "$ref": "#/$defs/EndpointId"
+        },
+        "class": {
+          "description": "Class.",
+          "$ref": "#/$defs/EndpointClass"
+        },
+        "connector": {
+          "description": "Connector type.",
+          "$ref": "#/$defs/Value5"
+        },
+        "status": {
+          "description": "Connection status (from the kernel's cached state; never a forced probe).",
+          "$ref": "#/$defs/Value6"
+        },
+        "name": {
+          "description": "Display name, e.g. the compositor's output description. Product names are not personal.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correlation": {
+          "description": "Keys that join this endpoint across layers.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CorrelationKey"
+          }
+        },
+        "sink": {
+          "description": "The connected sink, when one is connected and the sink field group is in scope.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SinkRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "layers": {
+          "description": "Capabilities and state as each layer reports them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LayerCapabilities"
+          }
+        },
+        "effective": {
+          "description": "What survives every layer, per presentation path.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EffectiveSet"
+          }
+        },
+        "paths": {
+          "description": "Path reports, per presentation path.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PathReport"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "class",
+        "connector",
+        "status"
+      ]
+    },
+    "Value5": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/ConnectorType"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ConnectorType": {
+      "description": "The physical connector type, as the driver names it.",
+      "oneOf": [
+        {
+          "description": "HDMI type A or B.",
+          "type": "string",
+          "const": "hdmi"
+        },
+        {
+          "description": "DisplayPort (also USB-C alt mode, which KMS reports as DisplayPort).",
+          "type": "string",
+          "const": "display_port"
+        },
+        {
+          "description": "USB-C, when the driver reports it as such.",
+          "type": "string",
+          "const": "usb_c"
+        },
+        {
+          "description": "DVI-I, DVI-D or DVI-A.",
+          "type": "string",
+          "const": "dvi"
+        },
+        {
+          "description": "VGA.",
+          "type": "string",
+          "const": "vga"
+        },
+        {
+          "description": "Embedded DisplayPort.",
+          "type": "string",
+          "const": "edp"
+        },
+        {
+          "description": "LVDS.",
+          "type": "string",
+          "const": "lvds"
+        },
+        {
+          "description": "MIPI DSI.",
+          "type": "string",
+          "const": "dsi"
+        },
+        {
+          "description": "A virtual connector (virtio-gpu, QXL, VKMS).",
+          "type": "string",
+          "const": "virtual"
+        },
+        {
+          "description": "A writeback connector (never a display; listed for completeness).",
+          "type": "string",
+          "const": "writeback"
+        },
+        {
+          "description": "Something else, named as the driver names it.",
+          "type": "object",
+          "properties": {
+            "other": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "other"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Value6": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/ConnectionStatus"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ConnectionStatus": {
+      "description": "Whether something is plugged in.",
+      "oneOf": [
+        {
+          "description": "A sink is connected.",
+          "type": "string",
+          "const": "connected"
+        },
+        {
+          "description": "Nothing is connected.",
+          "type": "string",
+          "const": "disconnected"
+        },
+        {
+          "description": "The driver can't tell.",
+          "type": "string",
+          "const": "unknown"
+        }
+      ]
+    },
+    "CorrelationKey": {
+      "description": "A key that identifies this endpoint in one layer, with how sure the join is.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The key.",
+          "$ref": "#/$defs/CorrelationId"
+        },
+        "confidence": {
+          "description": "Measured when the layer states the key directly; inferred when matched heuristically.",
+          "$ref": "#/$defs/Confidence"
+        }
+      },
+      "required": [
+        "id",
+        "confidence"
+      ]
+    },
+    "CorrelationId": {
+      "description": "Identifiers used to join an endpoint across layers (and, through the DRM connector and sink\nkey, with AudioCaps' HDMI/DP audio endpoints).",
+      "oneOf": [
+        {
+          "description": "DRM connector, e.g. `card1-HDMI-A-1` (the same key AudioCaps uses).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "drm_connector"
+            },
+            "name": {
+              "description": "Connector name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "description": "KMS connector object id on a card.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "kms_connector"
+            },
+            "card": {
+              "description": "Card, e.g. `card1`.",
+              "type": "string"
+            },
+            "id": {
+              "description": "Connector object id.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "card",
+            "id"
+          ]
+        },
+        {
+          "description": "KMS CRTC driving the connector.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "kms_crtc"
+            },
+            "card": {
+              "description": "Card, e.g. `card1`.",
+              "type": "string"
+            },
+            "id": {
+              "description": "CRTC object id.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "card",
+            "id"
+          ]
+        },
+        {
+          "description": "Wayland `wl_output` name, e.g. `HDMI-A-1`.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "wl_output"
+            },
+            "name": {
+              "description": "Output name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "description": "Mutter DisplayConfig monitor spec.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "mutter_monitor"
+            },
+            "connector": {
+              "description": "Connector, e.g. `HDMI-1`.",
+              "type": "string"
+            },
+            "vendor": {
+              "description": "Vendor (PNP id).",
+              "type": "string"
+            },
+            "product": {
+              "description": "Product.",
+              "type": "string"
+            },
+            "serial": {
+              "description": "Serial (redacted on export by default).",
+              "$ref": "#/$defs/Sensitive"
+            }
+          },
+          "required": [
+            "kind",
+            "connector",
+            "vendor",
+            "product",
+            "serial"
+          ]
+        },
+        {
+          "description": "X11 RandR output, e.g. `HDMI-A-0`.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "randr_output"
+            },
+            "name": {
+              "description": "Output name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "description": "The sink key (shared with AudioCaps for the same device).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "sink_key"
+            },
+            "key": {
+              "description": "The key.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "key"
+          ]
+        }
+      ]
+    },
+    "Sensitive": {
+      "description": "A sensitive string, redacted on export according to its kind.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What kind of data this is; decides how it is redacted.",
+          "$ref": "#/$defs/SensitiveKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "oneOf": [
+        {
+          "description": "The original value (only when the application opted out of redaction).",
+          "type": "object",
+          "properties": {
+            "clear": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "clear"
+          ]
+        },
+        {
+          "description": "A stable hash (`sha256:<16 hex>`) or the literal `redacted`.",
+          "type": "object",
+          "properties": {
+            "redacted": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "redacted"
+          ]
+        }
+      ],
+      "x-displaycaps-redaction": "serial: sha256 hash prefix; device_name: masked as 'redacted'; applied unless the application opts out"
+    },
+    "SensitiveKind": {
+      "description": "What kind of sensitive data a [`Sensitive`] holds.",
+      "oneOf": [
+        {
+          "description": "A hardware serial number (EDID serial number or serial string descriptor).",
+          "type": "string",
+          "const": "serial"
+        },
+        {
+          "description": "A user-visible name that may identify a person (e.g. a user-named virtual output).",
+          "type": "string",
+          "const": "device_name"
+        }
+      ]
+    },
+    "SinkRecord": {
+      "description": "What the sink at the far end of the cable says it is and can do.",
+      "type": "object",
+      "properties": {
+        "identity": {
+          "description": "Identity of the sink, with the same fields and key as AudioCaps' sink identity.",
+          "$ref": "#/$defs/SinkIdentity"
+        },
+        "edid": {
+          "description": "EDID facts that aren't capabilities: version, extensions, checksum state.",
+          "$ref": "#/$defs/Value8"
+        },
+        "video": {
+          "description": "Video capabilities the sink advertises (EDID, CTA-861 and DisplayID blocks).",
+          "$ref": "#/$defs/CapabilitySet"
+        },
+        "link": {
+          "description": "Link limits the sink states (HDMI and HDMI Forum VSDBs, DisplayID).",
+          "$ref": "#/$defs/Value15"
+        },
+        "chain": {
+          "description": "Devices in between (receiver, splitter, adapter, dock), when known.",
+          "$ref": "#/$defs/Value17"
+        },
+        "quirks": {
+          "description": "Quirk-data entries that matched this sink, with their effects.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AppliedQuirk"
+          }
+        }
+      },
+      "required": [
+        "identity",
+        "edid",
+        "video",
+        "link",
+        "chain"
+      ]
+    },
+    "SinkIdentity": {
+      "description": "Identity of a sink. Same fields and key algorithm as AudioCaps' `SinkIdentity`, so the combined\nlibrary can join a display endpoint with its HDMI/DP audio endpoint.",
+      "type": "object",
+      "properties": {
+        "manufacturer_id": {
+          "description": "Three-letter PNP manufacturer ID, e.g. `HEC`.",
+          "$ref": "#/$defs/Value2"
+        },
+        "manufacturer_name": {
+          "description": "Manufacturer name resolved from the PNP ID.",
+          "$ref": "#/$defs/Value2"
+        },
+        "product_code": {
+          "description": "Product code.",
+          "$ref": "#/$defs/Value7"
+        },
+        "model_name": {
+          "description": "Monitor name, e.g. `HISENSE`.",
+          "$ref": "#/$defs/Value2"
+        },
+        "serial": {
+          "description": "Serial number (redacted on export by default).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sensitive"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sink_key": {
+          "description": "Stable key apps can store settings under; see [`sink_key`].",
+          "$ref": "#/$defs/Value2"
+        }
+      },
+      "required": [
+        "manufacturer_id",
+        "manufacturer_name",
+        "product_code",
+        "model_name",
+        "sink_key"
+      ]
+    },
+    "Value7": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Value8": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/EdidInfo"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "EdidInfo": {
+      "description": "EDID facts that describe the data rather than the display.",
+      "type": "object",
+      "properties": {
+        "version": {
+          "description": "EDID version, e.g. `1.4`.",
+          "type": "string"
+        },
+        "length": {
+          "description": "Length in bytes.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "extensions": {
+          "description": "Extension block tags in order, e.g. `[\"cta-861\", \"displayid\"]`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "checksums_valid": {
+          "description": "Every block's checksum is valid.",
+          "type": "boolean"
+        },
+        "manufactured": {
+          "description": "Week and year of manufacture, or model year, when stated.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interface": {
+          "description": "Digital input interface from the base block (`hdmi-a`, `displayport`, ...), when stated.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "length",
+        "checksums_valid"
+      ]
+    },
+    "CapabilitySet": {
+      "description": "What one layer reports, grouped by [`crate::scope::FieldGroup`].",
+      "type": "object",
+      "properties": {
+        "modes": {
+          "description": "Modes (field group `modes`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value9"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vrr": {
+          "description": "Variable refresh range (field group `vrr`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value10"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color_formats": {
+          "description": "Colour formats with their bit depths (field group `color_formats`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value11"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hdr": {
+          "description": "HDR capabilities (field group `hdr`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value12"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "colorimetry": {
+          "description": "Colorimetry (field group `colorimetry`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value13"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quantization": {
+          "description": "Quantization range (field group `quantization`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value14"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "link": {
+          "description": "Link limits (field group `link`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value15"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decode": {
+          "description": "Hardware decode profiles (field group `decode`, opt-in).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value16"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Value9": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Mode"
+              }
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Mode": {
+      "description": "One video mode.",
+      "type": "object",
+      "properties": {
+        "width": {
+          "description": "Active width in pixels.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "height": {
+          "description": "Active height in lines (per frame, so 1080 for 1080i).",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "refresh_mhz": {
+          "description": "Vertical refresh in millihertz (field rate for interlaced modes).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "interlaced": {
+          "description": "Interlaced.",
+          "type": "boolean"
+        },
+        "timing": {
+          "description": "Full timing, when the source gives one (detailed timings, VIC tables, KMS modes).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timing"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vic": {
+          "description": "CTA-861 Video Identification Code, when the mode is a VIC.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "hdmi_vic": {
+          "description": "HDMI VIC (the 4K modes of the HDMI 1.4 VSDB), when the mode is one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "preferred": {
+          "description": "The sink's preferred (native) mode.",
+          "type": "boolean"
+        },
+        "ycbcr420": {
+          "description": "Whether the mode can also, or only, be sent as YCbCr 4:2:0.",
+          "$ref": "#/$defs/Ycbcr420"
+        },
+        "sources": {
+          "description": "Where the mode was listed (EDID block types, KMS, compositor).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModeSource"
+          }
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "refresh_mhz"
+      ]
+    },
+    "Timing": {
+      "description": "A full video timing.",
+      "type": "object",
+      "properties": {
+        "pixel_clock_khz": {
+          "description": "Pixel clock in kHz.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "h_total": {
+          "description": "Total pixels per line, blanking included.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "v_total": {
+          "description": "Total lines per frame, blanking included.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "h_sync_positive": {
+          "description": "Horizontal sync polarity is positive.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "v_sync_positive": {
+          "description": "Vertical sync polarity is positive.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "pixel_clock_khz",
+        "h_total",
+        "v_total"
+      ]
+    },
+    "Ycbcr420": {
+      "description": "YCbCr 4:2:0 support of a mode (CTA-861 4:2:0 video and capability map data blocks).",
+      "oneOf": [
+        {
+          "description": "Not as 4:2:0.",
+          "type": "string",
+          "const": "no"
+        },
+        {
+          "description": "As 4:2:0 in addition to the other formats.",
+          "type": "string",
+          "const": "also"
+        },
+        {
+          "description": "Only as 4:2:0 (YCbCr 4:2:0 video data block).",
+          "type": "string",
+          "const": "only"
+        }
+      ]
+    },
+    "ModeSource": {
+      "description": "Where a mode was listed.",
+      "oneOf": [
+        {
+          "description": "EDID established timings.",
+          "type": "string",
+          "const": "established"
+        },
+        {
+          "description": "EDID standard timings.",
+          "type": "string",
+          "const": "standard"
+        },
+        {
+          "description": "EDID or CTA-861 detailed timing descriptor.",
+          "type": "string",
+          "const": "detailed"
+        },
+        {
+          "description": "CTA-861 video data block (VIC).",
+          "type": "string",
+          "const": "cta_vic"
+        },
+        {
+          "description": "HDMI VSDB HDMI VIC.",
+          "type": "string",
+          "const": "hdmi_vic"
+        },
+        {
+          "description": "DisplayID timing block.",
+          "type": "string",
+          "const": "display_id"
+        },
+        {
+          "description": "EDID CVT 3-byte codes.",
+          "type": "string",
+          "const": "cvt"
+        },
+        {
+          "description": "The kernel's mode list for the connector.",
+          "type": "string",
+          "const": "kms"
+        },
+        {
+          "description": "The compositor's mode list for the output.",
+          "type": "string",
+          "const": "compositor"
+        }
+      ]
+    },
+    "Value10": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/VrrRange"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "VrrRange": {
+      "description": "Variable refresh range.",
+      "type": "object",
+      "properties": {
+        "min_mhz": {
+          "description": "Lowest refresh in millihertz.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "max_mhz": {
+          "description": "Highest refresh in millihertz.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "kind": {
+          "description": "Where the range comes from.",
+          "$ref": "#/$defs/VrrKind"
+        }
+      },
+      "required": [
+        "min_mhz",
+        "max_mhz",
+        "kind"
+      ]
+    },
+    "VrrKind": {
+      "description": "Kinds of variable refresh.",
+      "oneOf": [
+        {
+          "description": "HDMI 2.1 VRR (HDMI Forum VSDB VRRmin/VRRmax).",
+          "type": "string",
+          "const": "hdmi_vrr"
+        },
+        {
+          "description": "FreeSync / Adaptive-Sync from the EDID range limits or the AMD VSDB.",
+          "type": "string",
+          "const": "adaptive_sync"
+        },
+        {
+          "description": "As reported by the kernel or compositor, origin not stated.",
+          "type": "string",
+          "const": "reported"
+        }
+      ]
+    },
+    "Value11": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ColorFormatSupport"
+              }
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ColorFormatSupport": {
+      "description": "One colour format and the bit depths per component it can carry.",
+      "type": "object",
+      "properties": {
+        "format": {
+          "description": "The format.",
+          "$ref": "#/$defs/ColorFormat"
+        },
+        "bit_depths": {
+          "description": "Bits per component, ascending (e.g. `[8, 10, 12]`).",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      },
+      "required": [
+        "format",
+        "bit_depths"
+      ]
+    },
+    "ColorFormat": {
+      "description": "Colour encodings on the wire.",
+      "oneOf": [
+        {
+          "description": "RGB 4:4:4.",
+          "type": "string",
+          "const": "rgb"
+        },
+        {
+          "description": "YCbCr 4:4:4.",
+          "type": "string",
+          "const": "ycbcr444"
+        },
+        {
+          "description": "YCbCr 4:2:2.",
+          "type": "string",
+          "const": "ycbcr422"
+        },
+        {
+          "description": "YCbCr 4:2:0.",
+          "type": "string",
+          "const": "ycbcr420"
+        }
+      ]
+    },
+    "Value12": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/HdrCapabilities"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "HdrCapabilities": {
+      "description": "What a layer says about HDR.",
+      "type": "object",
+      "properties": {
+        "eotfs": {
+          "description": "Transfer functions accepted.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Eotf"
+          }
+        },
+        "formats": {
+          "description": "HDR formats this layer passes or the sink accepts.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HdrFormat"
+          }
+        },
+        "static_metadata_types": {
+          "description": "Static metadata descriptor types supported (type 1 is ST 2086).",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "max_luminance_nits": {
+          "description": "Desired content max luminance (peak), in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "max_frame_average_nits": {
+          "description": "Desired content max frame-average luminance, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "min_luminance_nits": {
+          "description": "Desired content min luminance, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "dynamic": {
+          "description": "Dynamic HDR detail (HDR10+ and Dolby Vision blocks).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DynamicHdr"
+          }
+        }
+      }
+    },
+    "Eotf": {
+      "description": "Electro-optical transfer functions a sink accepts (CTA-861 HDR static metadata block).",
+      "oneOf": [
+        {
+          "description": "Traditional gamma, SDR luminance range.",
+          "type": "string",
+          "const": "traditional_sdr"
+        },
+        {
+          "description": "Traditional gamma, HDR luminance range.",
+          "type": "string",
+          "const": "traditional_hdr"
+        },
+        {
+          "description": "SMPTE ST 2084 (PQ), used by HDR10, HDR10+ and Dolby Vision.",
+          "type": "string",
+          "const": "pq"
+        },
+        {
+          "description": "Hybrid Log-Gamma (BT.2100 HLG).",
+          "type": "string",
+          "const": "hlg"
+        }
+      ]
+    },
+    "HdrFormat": {
+      "description": "HDR formats an application can target.",
+      "oneOf": [
+        {
+          "description": "PQ with static metadata (ST 2086 + MaxCLL/MaxFALL).",
+          "type": "string",
+          "const": "hdr10"
+        },
+        {
+          "description": "Hybrid Log-Gamma.",
+          "type": "string",
+          "const": "hlg"
+        },
+        {
+          "description": "HDR10+ dynamic metadata.",
+          "type": "string",
+          "const": "hdr10_plus"
+        },
+        {
+          "description": "Dolby Vision.",
+          "type": "string",
+          "const": "dolby_vision"
+        }
+      ]
+    },
+    "DynamicHdr": {
+      "description": "Dynamic-metadata HDR support as the sink describes it.",
+      "oneOf": [
+        {
+          "description": "HDR10+ (HDR10+ vendor-specific video data block).",
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "const": "hdr10_plus"
+            },
+            "application_version": {
+              "description": "Application version from the block.",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "required": [
+            "format",
+            "application_version"
+          ]
+        },
+        {
+          "description": "Dolby Vision (Dolby vendor-specific video data block).",
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "const": "dolby_vision"
+            },
+            "version": {
+              "description": "Block version (0, 1 or 2).",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "yuv422_12bit": {
+              "description": "Supports 12-bit 4:2:2 YUV (the standard DV interface).",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "low_latency": {
+              "description": "Low-latency (sink-led) Dolby Vision is supported.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "max_luminance_nits": {
+              "description": "Target max luminance from the block, in nits.",
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
+            }
+          },
+          "required": [
+            "format",
+            "version"
+          ]
+        },
+        {
+          "description": "Another dynamic metadata type from the HDR dynamic metadata data block.",
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "const": "other"
+            },
+            "metadata_type": {
+              "description": "Metadata type number.",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          },
+          "required": [
+            "format",
+            "metadata_type"
+          ]
+        }
+      ]
+    },
+    "Value13": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Colorimetry"
+              }
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Colorimetry": {
+      "description": "Colorimetry, as in the CTA-861 colorimetry data block (and their KMS `Colorspace` peers).",
+      "oneOf": [
+        {
+          "description": "BT.709 / sRGB (the default; never listed in the block).",
+          "type": "string",
+          "const": "default"
+        },
+        {
+          "description": "xvYCC601.",
+          "type": "string",
+          "const": "xvycc601"
+        },
+        {
+          "description": "xvYCC709.",
+          "type": "string",
+          "const": "xvycc709"
+        },
+        {
+          "description": "sYCC601.",
+          "type": "string",
+          "const": "sycc601"
+        },
+        {
+          "description": "opYCC601 (AdobeYCC601).",
+          "type": "string",
+          "const": "op_ycc601"
+        },
+        {
+          "description": "opRGB (AdobeRGB).",
+          "type": "string",
+          "const": "op_rgb"
+        },
+        {
+          "description": "BT.2020 constant luminance YCbCr.",
+          "type": "string",
+          "const": "bt2020_cycc"
+        },
+        {
+          "description": "BT.2020 YCbCr.",
+          "type": "string",
+          "const": "bt2020_ycc"
+        },
+        {
+          "description": "BT.2020 RGB.",
+          "type": "string",
+          "const": "bt2020_rgb"
+        },
+        {
+          "description": "DCI-P3 (SMPTE RP 431-2).",
+          "type": "string",
+          "const": "dci_p3"
+        },
+        {
+          "description": "ICtCp.",
+          "type": "string",
+          "const": "ictcp"
+        },
+        {
+          "description": "ST 2113 RGB.",
+          "type": "string",
+          "const": "st2113_rgb"
+        }
+      ]
+    },
+    "Value14": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/QuantizationSupport"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "QuantizationSupport": {
+      "description": "Quantization range support (CTA-861 video capability data block).",
+      "type": "object",
+      "properties": {
+        "rgb_selectable": {
+          "description": "The sink honours the RGB quantization range the source signals (QS bit).",
+          "type": "boolean"
+        },
+        "ycc_selectable": {
+          "description": "The sink honours the YCC quantization range the source signals (QY bit).",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "rgb_selectable",
+        "ycc_selectable"
+      ]
+    },
+    "Value15": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/LinkLimits"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "LinkLimits": {
+      "description": "What a link (or one end of it) can carry.",
+      "type": "object",
+      "properties": {
+        "max_tmds_character_rate_khz": {
+          "description": "Highest TMDS character rate in kHz (HDMI; 600000 for HDMI 2.0).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "max_frl": {
+          "description": "Highest HDMI 2.1 FRL rate.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrlRate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_dp": {
+          "description": "Highest DisplayPort link rate and lane count.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DpLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dsc": {
+          "description": "Display Stream Compression support.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DscSupport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allm": {
+          "description": "Auto Low Latency Mode.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max_bpc": {
+          "description": "Highest bits per component the layer allows (e.g. KMS `max bpc` range end).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        }
+      }
+    },
+    "FrlRate": {
+      "description": "HDMI 2.1 Fixed Rate Link rate.",
+      "type": "object",
+      "properties": {
+        "lanes": {
+          "description": "Lanes (3 or 4).",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "gbps_per_lane": {
+          "description": "Gbit/s per lane (3, 6, 8, 10 or 12).",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "lanes",
+        "gbps_per_lane"
+      ]
+    },
+    "DpLink": {
+      "description": "A DisplayPort link configuration.",
+      "type": "object",
+      "properties": {
+        "lanes": {
+          "description": "Lanes (1, 2 or 4).",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "rate": {
+          "description": "Rate per lane.",
+          "$ref": "#/$defs/DpRate"
+        }
+      },
+      "required": [
+        "lanes",
+        "rate"
+      ]
+    },
+    "DpRate": {
+      "description": "DisplayPort link rates.",
+      "oneOf": [
+        {
+          "description": "RBR, 1.62 Gbit/s per lane.",
+          "type": "string",
+          "const": "rbr"
+        },
+        {
+          "description": "HBR, 2.7 Gbit/s per lane.",
+          "type": "string",
+          "const": "hbr"
+        },
+        {
+          "description": "HBR2, 5.4 Gbit/s per lane.",
+          "type": "string",
+          "const": "hbr2"
+        },
+        {
+          "description": "HBR3, 8.1 Gbit/s per lane.",
+          "type": "string",
+          "const": "hbr3"
+        },
+        {
+          "description": "UHBR10, 10 Gbit/s per lane.",
+          "type": "string",
+          "const": "uhbr10"
+        },
+        {
+          "description": "UHBR13.5, 13.5 Gbit/s per lane.",
+          "type": "string",
+          "const": "uhbr13_5"
+        },
+        {
+          "description": "UHBR20, 20 Gbit/s per lane.",
+          "type": "string",
+          "const": "uhbr20"
+        }
+      ]
+    },
+    "DscSupport": {
+      "description": "Display Stream Compression support.",
+      "type": "object",
+      "properties": {
+        "version": {
+          "description": "DSC version, e.g. `1.2a`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_bpc": {
+          "description": "Highest bits per component DSC can carry.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "native_420": {
+          "description": "Native 4:2:0 compression supported.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max_frl": {
+          "description": "Highest FRL rate with DSC (HDMI).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrlRate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_slices": {
+          "description": "Maximum slices.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        }
+      }
+    },
+    "Value16": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DecodeProfile"
+              }
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "DecodeProfile": {
+      "description": "One hardware decode profile.",
+      "type": "object",
+      "properties": {
+        "api": {
+          "description": "API that reports it.",
+          "$ref": "#/$defs/DecodeApi"
+        },
+        "codec": {
+          "description": "Codec.",
+          "$ref": "#/$defs/VideoCodec"
+        },
+        "profile": {
+          "description": "Profile name as the API names it, e.g. `Main10`, `Profile2`.",
+          "type": "string"
+        },
+        "bit_depths": {
+          "description": "Bit depths decodable.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "maximum": 255
+          }
+        },
+        "chroma": {
+          "description": "Chroma formats decodable.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ColorFormat"
+          }
+        },
+        "max_width": {
+          "description": "Largest picture width.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "max_height": {
+          "description": "Largest picture height.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "api",
+        "codec",
+        "profile"
+      ]
+    },
+    "DecodeApi": {
+      "description": "Decode APIs.",
+      "oneOf": [
+        {
+          "description": "VA-API.",
+          "type": "string",
+          "const": "va_api"
+        },
+        {
+          "description": "Vulkan Video.",
+          "type": "string",
+          "const": "vulkan_video"
+        }
+      ]
+    },
+    "VideoCodec": {
+      "description": "Video codecs for decode capabilities and content requests.",
+      "oneOf": [
+        {
+          "description": "MPEG-2 Video.",
+          "type": "string",
+          "const": "mpeg2"
+        },
+        {
+          "description": "H.264 / AVC.",
+          "type": "string",
+          "const": "h264"
+        },
+        {
+          "description": "H.265 / HEVC.",
+          "type": "string",
+          "const": "hevc"
+        },
+        {
+          "description": "VP8.",
+          "type": "string",
+          "const": "vp8"
+        },
+        {
+          "description": "VP9.",
+          "type": "string",
+          "const": "vp9"
+        },
+        {
+          "description": "AV1.",
+          "type": "string",
+          "const": "av1"
+        },
+        {
+          "description": "H.266 / VVC.",
+          "type": "string",
+          "const": "vvc"
+        },
+        {
+          "description": "VC-1.",
+          "type": "string",
+          "const": "vc1"
+        }
+      ]
+    },
+    "Value17": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ChainDevice"
+              }
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ChainDevice": {
+      "description": "A device between the GPU and the display (receiver, splitter, extractor, adapter, dock).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What kind of device.",
+          "$ref": "#/$defs/ChainDeviceKind"
+        },
+        "identity": {
+          "description": "Its identity, when it has one of its own.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SinkIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confidence": {
+          "description": "How sure the detection is.",
+          "$ref": "#/$defs/Confidence"
+        },
+        "evidence": {
+          "description": "Why it was detected, e.g. `HDMI sink EDID on a DP connector`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "confidence",
+        "evidence"
+      ]
+    },
+    "ChainDeviceKind": {
+      "description": "Kinds of device in the chain.",
+      "oneOf": [
+        {
+          "description": "AV receiver or soundbar passing video through.",
+          "type": "string",
+          "const": "receiver"
+        },
+        {
+          "description": "HDMI splitter or switch.",
+          "type": "string",
+          "const": "splitter"
+        },
+        {
+          "description": "Audio extractor or EDID emulator (often a fixed EDID).",
+          "type": "string",
+          "const": "extractor"
+        },
+        {
+          "description": "DP-to-HDMI (or similar) protocol converter.",
+          "type": "string",
+          "const": "adapter"
+        },
+        {
+          "description": "Dock or USB-C hub.",
+          "type": "string",
+          "const": "dock"
+        },
+        {
+          "description": "DisplayPort MST hub.",
+          "type": "string",
+          "const": "mst_hub"
+        }
+      ]
+    },
+    "AppliedQuirk": {
+      "description": "What a quirk entry corrects or adds.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Entry id, e.g. `lg-cx-zero-peak`.",
+          "type": "string"
+        },
+        "description": {
+          "description": "What the entry corrects or adds.",
+          "type": "string"
+        },
+        "origin": {
+          "description": "The pack it came from: `bundled`, or the directory that overrode it.",
+          "type": "string"
+        },
+        "reference": {
+          "description": "Where the facts come from (spec sheet, measurement, bug report).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effects": {
+          "description": "Effects.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuirkEffect"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "origin",
+        "effects"
+      ]
+    },
+    "QuirkEffect": {
+      "description": "One effect of a quirk entry. Effects are reported, and values they change are marked\n`inferred` with a `quirk` source.",
+      "oneOf": [
+        {
+          "description": "A capability no EDID field carries, e.g. `dolby_vision_low_latency_only`.",
+          "type": "object",
+          "properties": {
+            "effect": {
+              "type": "string",
+              "const": "feature"
+            },
+            "name": {
+              "description": "Feature name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "effect",
+            "name"
+          ]
+        },
+        {
+          "description": "The sink's real peak luminance, when the EDID misreports it.",
+          "type": "object",
+          "properties": {
+            "effect": {
+              "type": "string",
+              "const": "peak_luminance"
+            },
+            "nits": {
+              "description": "Nits.",
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "required": [
+            "effect",
+            "nits"
+          ]
+        },
+        {
+          "description": "An advertised mode the sink can't actually show.",
+          "type": "object",
+          "properties": {
+            "effect": {
+              "type": "string",
+              "const": "remove_mode"
+            },
+            "width": {
+              "description": "Width.",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "height": {
+              "description": "Height.",
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "refresh_mhz": {
+              "description": "Refresh in millihertz.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "effect",
+            "width",
+            "height",
+            "refresh_mhz"
+          ]
+        },
+        {
+          "description": "An HDR format the sink advertises but handles badly, or doesn't advertise but accepts.",
+          "type": "object",
+          "properties": {
+            "effect": {
+              "type": "string",
+              "const": "hdr_format"
+            },
+            "eotf": {
+              "description": "The transfer function.",
+              "$ref": "#/$defs/Eotf"
+            },
+            "supported": {
+              "description": "Whether the sink really accepts it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "effect",
+            "eotf",
+            "supported"
+          ]
+        },
+        {
+          "description": "Colorimetry the sink accepts but doesn't advertise.",
+          "type": "object",
+          "properties": {
+            "effect": {
+              "type": "string",
+              "const": "add_colorimetry"
+            },
+            "colorimetry": {
+              "description": "The colorimetry.",
+              "$ref": "#/$defs/Colorimetry"
+            }
+          },
+          "required": [
+            "effect",
+            "colorimetry"
+          ]
+        },
+        {
+          "description": "The EDID is fixed or copied (splitters, extractors), so it describes another device.",
+          "type": "object",
+          "properties": {
+            "effect": {
+              "type": "string",
+              "const": "fixed_edid"
+            }
+          },
+          "required": [
+            "effect"
+          ]
+        },
+        {
+          "description": "A note for diagnostics.",
+          "type": "object",
+          "properties": {
+            "effect": {
+              "type": "string",
+              "const": "note"
+            },
+            "text": {
+              "description": "Text.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "effect",
+            "text"
+          ]
+        }
+      ]
+    },
+    "LayerCapabilities": {
+      "description": "One layer's view of an endpoint.",
+      "type": "object",
+      "properties": {
+        "layer": {
+          "description": "The layer.",
+          "$ref": "#/$defs/LayerKind"
+        },
+        "availability": {
+          "description": "Whether the layer could be read.",
+          "$ref": "#/$defs/Availability"
+        },
+        "caps": {
+          "description": "What the layer lets through. Fields outside the probe scope are omitted.",
+          "$ref": "#/$defs/CapabilitySet"
+        },
+        "detail": {
+          "description": "State and detail that a capability set can't express, when in scope.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayerDetail"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "layer",
+        "availability",
+        "caps"
+      ]
+    },
+    "LayerDetail": {
+      "description": "State and detail per layer.",
+      "oneOf": [
+        {
+          "description": "Host hardware behind the connector.",
+          "type": "object",
+          "properties": {
+            "layer": {
+              "type": "string",
+              "const": "host_hardware"
+            }
+          },
+          "$ref": "#/$defs/HostDetail",
+          "required": [
+            "layer"
+          ]
+        },
+        {
+          "description": "Kernel driver state.",
+          "type": "object",
+          "properties": {
+            "layer": {
+              "type": "string",
+              "const": "kernel_driver"
+            }
+          },
+          "$ref": "#/$defs/DriverDetail",
+          "required": [
+            "layer"
+          ]
+        },
+        {
+          "description": "KMS state of the connector and its CRTC.",
+          "type": "object",
+          "properties": {
+            "layer": {
+              "type": "string",
+              "const": "kms"
+            }
+          },
+          "$ref": "#/$defs/KmsState",
+          "required": [
+            "layer"
+          ]
+        },
+        {
+          "description": "The link as worked out from the other layers.",
+          "type": "object",
+          "properties": {
+            "layer": {
+              "type": "string",
+              "const": "link"
+            }
+          },
+          "$ref": "#/$defs/LinkState",
+          "required": [
+            "layer"
+          ]
+        },
+        {
+          "description": "The compositor's view of the output.",
+          "type": "object",
+          "properties": {
+            "layer": {
+              "type": "string",
+              "const": "compositor"
+            }
+          },
+          "$ref": "#/$defs/CompositorOutput",
+          "required": [
+            "layer"
+          ]
+        }
+      ]
+    },
+    "Value18": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/Gpu"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Gpu": {
+      "description": "A GPU.",
+      "type": "object",
+      "properties": {
+        "card": {
+          "description": "DRM card, e.g. `card1`.",
+          "type": "string"
+        },
+        "pci_vendor": {
+          "description": "PCI vendor id.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "pci_device": {
+          "description": "PCI device id.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "pci_slot": {
+          "description": "PCI slot, e.g. `0000:03:00.0` (bus topology, not personal).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vendor_name": {
+          "description": "Vendor name from the id table.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "driver": {
+          "description": "Kernel driver, e.g. `amdgpu`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "card"
+      ]
+    },
+    "HostDetail": {
+      "description": "GPU and connector hardware.",
+      "type": "object",
+      "properties": {
+        "gpu": {
+          "description": "The GPU this connector belongs to.",
+          "$ref": "#/$defs/Value18"
+        },
+        "connector_index": {
+          "description": "Connector index on the card for its type, e.g. `1` for `HDMI-A-1`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "gpu"
+      ]
+    },
+    "Value19": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ModuleParameter"
+              }
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ModuleParameter": {
+      "description": "One module parameter.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Name, e.g. `dcfeaturemask`.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Value as the kernel prints it.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ]
+    },
+    "DriverFeature": {
+      "description": "A driver feature that gates a display capability.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Feature, e.g. `hdmi_frl`.",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Whether it is enabled.",
+          "$ref": "#/$defs/Value20"
+        }
+      },
+      "required": [
+        "name",
+        "enabled"
+      ]
+    },
+    "Value20": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "boolean"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "DriverDetail": {
+      "description": "Kernel driver state that affects the display path.",
+      "type": "object",
+      "properties": {
+        "driver": {
+          "description": "Driver name, e.g. `amdgpu`, `i915`, `virtio_gpu`.",
+          "$ref": "#/$defs/Value2"
+        },
+        "parameters": {
+          "description": "Module parameters that matter for display (e.g. `dcfeaturemask`), as read.",
+          "$ref": "#/$defs/Value19"
+        },
+        "features": {
+          "description": "Feature gates worked out from the parameters and kernel version (e.g. HDMI FRL).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DriverFeature"
+          }
+        }
+      },
+      "required": [
+        "driver",
+        "parameters"
+      ]
+    },
+    "Value21": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Mode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Value22": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Value23": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/ColorFormat"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Value24": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/HdrMetadata"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "HdrMetadata": {
+      "description": "HDR static metadata (CTA-861 infoframe type 1), as sent to the sink.",
+      "type": "object",
+      "properties": {
+        "eotf": {
+          "description": "Transfer function signalled.",
+          "$ref": "#/$defs/Eotf"
+        },
+        "max_mastering_nits": {
+          "description": "Mastering display max luminance, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "min_mastering_nits": {
+          "description": "Mastering display min luminance, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "max_cll_nits": {
+          "description": "MaxCLL, in nits.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "max_fall_nits": {
+          "description": "MaxFALL, in nits.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "eotf"
+      ]
+    },
+    "KmsState": {
+      "description": "KMS state of one connector, read with read-only ioctls. Never set, never forced.",
+      "type": "object",
+      "properties": {
+        "active_mode": {
+          "description": "The active mode, when the connector drives a CRTC.",
+          "$ref": "#/$defs/Value21"
+        },
+        "max_bpc": {
+          "description": "`max bpc`: the current value.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value22"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "colorspace": {
+          "description": "`Colorspace` property, as named by the driver (e.g. `BT2020_RGB`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color_format": {
+          "description": "`color format` property (Linux 7.3+), when the driver has it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value23"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hdr_output_metadata": {
+          "description": "`HDR_OUTPUT_METADATA` blob, decoded; `None` inside the value when unset (SDR).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value24"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "broadcast_rgb": {
+          "description": "`Broadcast RGB` (`Automatic`, `Full`, `Limited 16:235`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vrr_capable": {
+          "description": "`vrr_capable` on the connector.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value20"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vrr_enabled": {
+          "description": "`VRR_ENABLED` on the CRTC.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value20"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content_type": {
+          "description": "`content type`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "link_status": {
+          "description": "`link-status` (`Good` or `Bad`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "panel_orientation": {
+          "description": "`panel orientation`, for internal panels.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "active_mode"
+      ]
+    },
+    "Value25": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/LinkSignal"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "LinkSignal": {
+      "description": "The physical signal.",
+      "oneOf": [
+        {
+          "description": "HDMI TMDS.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tmds"
+            },
+            "character_rate_khz": {
+              "description": "TMDS character rate in kHz.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "character_rate_khz"
+          ]
+        },
+        {
+          "description": "HDMI 2.1 FRL.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "frl"
+            },
+            "rate": {
+              "description": "The FRL rate.",
+              "$ref": "#/$defs/FrlRate"
+            }
+          },
+          "required": [
+            "kind",
+            "rate"
+          ]
+        },
+        {
+          "description": "DisplayPort.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "display_port"
+            },
+            "link": {
+              "description": "Lanes and rate.",
+              "$ref": "#/$defs/DpLink"
+            }
+          },
+          "required": [
+            "kind",
+            "link"
+          ]
+        },
+        {
+          "description": "A virtual link (VM display, writeback): no wire, no limits.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "virtual"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "Value26": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/QuantRange"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "QuantRange": {
+      "description": "Quantization range of a signal.",
+      "oneOf": [
+        {
+          "description": "Limited (16–235 for 8-bit).",
+          "type": "string",
+          "const": "limited"
+        },
+        {
+          "description": "Full (0–255 for 8-bit).",
+          "type": "string",
+          "const": "full"
+        }
+      ]
+    },
+    "Value27": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "LinkState": {
+      "description": "The signal on the wire, worked out from the mode, the properties and the link limits.\nAlways `inferred`: KMS reports what was requested, not always what was negotiated.",
+      "type": "object",
+      "properties": {
+        "signal": {
+          "description": "TMDS, FRL or DisplayPort, and its rate.",
+          "$ref": "#/$defs/Value25"
+        },
+        "color_format": {
+          "description": "Colour format on the wire.",
+          "$ref": "#/$defs/Value23"
+        },
+        "bit_depth": {
+          "description": "Bits per component on the wire.",
+          "$ref": "#/$defs/Value22"
+        },
+        "range": {
+          "description": "Quantization range on the wire.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value26"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dsc": {
+          "description": "Whether DSC is in use.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value20"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required_kbps": {
+          "description": "Data rate the signal needs, in kbit/s.",
+          "$ref": "#/$defs/Value27"
+        },
+        "capacity_kbps": {
+          "description": "Data rate the link can carry, in kbit/s.",
+          "$ref": "#/$defs/Value27"
+        },
+        "limited_by": {
+          "description": "Devices between the GPU and the sink that limit the link (adapter, dock, MST).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "signal",
+        "color_format",
+        "bit_depth",
+        "required_kbps",
+        "capacity_kbps"
+      ]
+    },
+    "Value28": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/Mode"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Value29": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "type": "number",
+              "format": "float"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Value30": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/ImageDescription"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ImageDescription": {
+      "description": "An image description: what the compositor will turn content into for this output.",
+      "type": "object",
+      "properties": {
+        "primaries": {
+          "description": "Named primaries, e.g. `srgb`, `bt2020`, or `custom`.",
+          "type": "string"
+        },
+        "transfer": {
+          "description": "Named transfer function, e.g. `srgb`, `st2084_pq`, `bt1886`.",
+          "type": "string"
+        },
+        "min_luminance_nits": {
+          "description": "Min luminance, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "max_luminance_nits": {
+          "description": "Max (peak) luminance, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "reference_luminance_nits": {
+          "description": "Reference white luminance, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "target_primaries": {
+          "description": "Target colour volume primaries, when different from `primaries`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_max_luminance_nits": {
+          "description": "Target max luminance, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "required": [
+        "primaries",
+        "transfer"
+      ]
+    },
+    "Value31": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/VrrPolicy"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "VrrPolicy": {
+      "description": "When the compositor uses variable refresh.",
+      "oneOf": [
+        {
+          "description": "Never.",
+          "type": "string",
+          "const": "never"
+        },
+        {
+          "description": "Always.",
+          "type": "string",
+          "const": "always"
+        },
+        {
+          "description": "Only for fullscreen surfaces that ask for it (games, video).",
+          "type": "string",
+          "const": "automatic"
+        }
+      ]
+    },
+    "CompositorOutput": {
+      "description": "The compositor's view of one output.",
+      "type": "object",
+      "properties": {
+        "compositor": {
+          "description": "Which compositor reported it.",
+          "$ref": "#/$defs/CompositorKind"
+        },
+        "output_name": {
+          "description": "The output's name in the compositor, e.g. `HDMI-A-1`.",
+          "$ref": "#/$defs/Value2"
+        },
+        "enabled": {
+          "description": "The output is enabled.",
+          "$ref": "#/$defs/Value20"
+        },
+        "mode": {
+          "description": "The current mode as the compositor reports it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value28"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scale": {
+          "description": "Scale factor.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value29"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hdr_enabled": {
+          "description": "HDR mode switched on.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value20"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wide_color_enabled": {
+          "description": "Wide colour gamut (BT.2020 signalling) switched on.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value20"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sdr_brightness_nits": {
+          "description": "SDR content brightness in nits, when HDR is on.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value29"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "image_description": {
+          "description": "The output's image description (color-management-v1, or the compositor's own API).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value30"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vrr_policy": {
+          "description": "VRR policy.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value31"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rgb_range": {
+          "description": "RGB range setting the compositor applies.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_bpc": {
+          "description": "Max bits per component the compositor requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value22"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hdr": {
+          "description": "HDR capabilities as the compositor reports them for the output.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value12"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "compositor",
+        "output_name",
+        "enabled"
+      ]
+    },
+    "EffectiveSet": {
+      "description": "What survives every layer for one presentation path.",
+      "type": "object",
+      "properties": {
+        "presentation_path": {
+          "description": "The presentation path.",
+          "$ref": "#/$defs/PresentationPath"
+        },
+        "availability": {
+          "description": "Whether the path could be evaluated.",
+          "$ref": "#/$defs/Availability"
+        },
+        "caps": {
+          "description": "The effective capabilities.",
+          "$ref": "#/$defs/CapabilitySet"
+        },
+        "limited_by": {
+          "description": "Which layer limits which field group.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Limit"
+          }
+        }
+      },
+      "required": [
+        "presentation_path",
+        "availability",
+        "caps"
+      ]
+    },
+    "Limit": {
+      "description": "One layer limiting one field group.",
+      "type": "object",
+      "properties": {
+        "layer": {
+          "description": "The limiting layer.",
+          "$ref": "#/$defs/LayerKind"
+        },
+        "field": {
+          "description": "The limited field group.",
+          "$ref": "#/$defs/FieldGroup"
+        }
+      },
+      "required": [
+        "layer",
+        "field"
+      ]
+    },
+    "PathReport": {
+      "description": "The hops from the application's content to the panel for one presentation path.",
+      "type": "object",
+      "properties": {
+        "presentation_path": {
+          "description": "The presentation path.",
+          "$ref": "#/$defs/PresentationPath"
+        },
+        "content": {
+          "description": "The content the report was computed for, when the application gave one; otherwise the\nreport describes the desktop as it is now.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hops": {
+          "description": "Hops in order, application first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Hop"
+          }
+        },
+        "bottleneck": {
+          "description": "Index into `hops` of the bottleneck, if any.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "presentation_path",
+        "hops"
+      ]
+    },
+    "ContentRequest": {
+      "description": "What an application intends to show, for content queries, path reports and recommendations.",
+      "type": "object",
+      "properties": {
+        "codec": {
+          "description": "Codec, for decode checks.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoCodec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "description": "Codec profile, e.g. `Main10`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bit_depth": {
+          "description": "Bits per component of the content.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "width": {
+          "description": "Width in pixels.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "height": {
+          "description": "Height in lines.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "frame_rate_mhz": {
+          "description": "Frame rate in millihertz (23.976 fps is `23976`).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "hdr": {
+          "description": "HDR format, `None` for SDR content.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HdrFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "colorimetry": {
+          "description": "Colorimetry, e.g. BT.2020.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Colorimetry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "needs_chroma": {
+          "description": "Chroma format the content needs on the wire to look right (4:4:4 for desktop text).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColorFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Hop": {
+      "description": "One hop in a path report.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Kind of hop.",
+          "$ref": "#/$defs/HopKind"
+        },
+        "label": {
+          "description": "Short label, e.g. `KWin 6.5`, `HDMI TMDS 594 MHz`.",
+          "type": "string"
+        },
+        "format": {
+          "description": "Format carried at this hop.",
+          "$ref": "#/$defs/Value32"
+        },
+        "rate_kbps": {
+          "description": "Data rate carried, in kbit/s (link hops).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value27"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ceiling_kbps": {
+          "description": "Highest data rate this hop can carry, in kbit/s (link hops).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value27"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "losses": {
+          "description": "What is lost at this hop.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Loss"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "format"
+      ]
+    },
+    "HopKind": {
+      "description": "Kinds of hop, from the content to the panel.",
+      "oneOf": [
+        {
+          "description": "The application and its content.",
+          "type": "string",
+          "const": "application"
+        },
+        {
+          "description": "The video decoder.",
+          "type": "string",
+          "const": "decoder"
+        },
+        {
+          "description": "The renderer and tone mapper (what the player renders to).",
+          "type": "string",
+          "const": "renderer"
+        },
+        {
+          "description": "The compositor (Wayland or X11).",
+          "type": "string",
+          "const": "compositor"
+        },
+        {
+          "description": "KMS and the kernel driver.",
+          "type": "string",
+          "const": "kms_driver"
+        },
+        {
+          "description": "The HDMI/DP link.",
+          "type": "string",
+          "const": "link"
+        },
+        {
+          "description": "The sink.",
+          "type": "string",
+          "const": "sink"
+        },
+        {
+          "description": "Devices between the GPU and the display (receiver, splitter, adapter, dock).",
+          "type": "string",
+          "const": "sink_chain"
+        },
+        {
+          "description": "The sandbox or session around the app.",
+          "type": "string",
+          "const": "environment"
+        },
+        {
+          "description": "The whole path (for findings that are not about one hop).",
+          "type": "string",
+          "const": "whole_path"
+        }
+      ]
+    },
+    "Value32": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/VideoFormat"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "VideoFormat": {
+      "description": "A picture format at a hop.",
+      "type": "object",
+      "properties": {
+        "width": {
+          "description": "Width in pixels.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "height": {
+          "description": "Height in lines.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "rate_mhz": {
+          "description": "Refresh or frame rate in millihertz.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "color_format": {
+          "description": "Colour format.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ColorFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bit_depth": {
+          "description": "Bits per component.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "hdr": {
+          "description": "HDR format, `None` for SDR.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HdrFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "colorimetry": {
+          "description": "Colorimetry.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Colorimetry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "range": {
+          "description": "Quantization range.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuantRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "rate_mhz"
+      ]
+    },
+    "Loss": {
+      "description": "Something lost at a hop.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "Kind of loss.",
+          "$ref": "#/$defs/LossKind"
+        },
+        "detail": {
+          "description": "Detail, e.g. `10 → 8 bit`.",
+          "type": "string"
+        },
+        "finding": {
+          "description": "The finding that explains it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FindingCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "detail"
+      ]
+    },
+    "LossKind": {
+      "description": "Kinds of loss.",
+      "oneOf": [
+        {
+          "description": "Resolution reduced or scaled.",
+          "type": "string",
+          "const": "resolution"
+        },
+        {
+          "description": "Refresh doesn't match the content, or is lower than asked.",
+          "type": "string",
+          "const": "refresh"
+        },
+        {
+          "description": "Bits per component reduced.",
+          "type": "string",
+          "const": "bit_depth"
+        },
+        {
+          "description": "Chroma subsampled (4:2:2 or 4:2:0).",
+          "type": "string",
+          "const": "chroma"
+        },
+        {
+          "description": "Quantization range changed or mismatched.",
+          "type": "string",
+          "const": "range"
+        },
+        {
+          "description": "HDR tone-mapped to SDR.",
+          "type": "string",
+          "const": "hdr"
+        },
+        {
+          "description": "Dynamic HDR (Dolby Vision, HDR10+) dropped to static.",
+          "type": "string",
+          "const": "dynamic_hdr"
+        },
+        {
+          "description": "Wide gamut mapped to a smaller one.",
+          "type": "string",
+          "const": "gamut"
+        },
+        {
+          "description": "Variable refresh not used.",
+          "type": "string",
+          "const": "vrr"
+        },
+        {
+          "description": "Hardware decode not available.",
+          "type": "string",
+          "const": "decode"
+        }
+      ]
+    },
+    "FindingCode": {
+      "description": "Stable finding code, e.g. `HDR_AVAILABLE_NOT_ENABLED`. Codes come from rule packs, so this is a\nstring rather than a closed enum; codes are never reused for a different meaning.",
+      "type": "string"
+    },
+    "Recommendation": {
+      "description": "A recommendation for content on a path. DisplayCaps returns it; the app or the compositor\napplies it. DisplayCaps never changes a mode or setting.",
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "The endpoint it is for.",
+          "$ref": "#/$defs/EndpointId"
+        },
+        "presentation_path": {
+          "description": "The presentation path it is for.",
+          "$ref": "#/$defs/PresentationPath"
+        },
+        "mode": {
+          "description": "The mode to switch to (a mode the sink lists).",
+          "$ref": "#/$defs/Mode"
+        },
+        "color_format": {
+          "description": "Colour format the link would carry.",
+          "$ref": "#/$defs/ColorFormat"
+        },
+        "bit_depth": {
+          "description": "Bits per component the link would carry.",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "hdr": {
+          "description": "HDR format to render for, `None` to render SDR.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HdrFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_peak_nits": {
+          "description": "Peak luminance to tone-map to, in nits.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "compromises": {
+          "description": "What the recommendation gives up, if anything.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Loss"
+          }
+        }
+      },
+      "required": [
+        "endpoint",
+        "presentation_path",
+        "mode",
+        "color_format",
+        "bit_depth"
+      ]
+    },
+    "Finding": {
+      "description": "A diagnostic finding.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Stable code.",
+          "$ref": "#/$defs/FindingCode"
+        },
+        "severity": {
+          "description": "Severity.",
+          "$ref": "#/$defs/Severity"
+        },
+        "endpoint": {
+          "description": "The endpoint it concerns, if any.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EndpointId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presentation_path": {
+          "description": "The presentation path it concerns, if any.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationPath"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hop": {
+          "description": "The hop where it happens.",
+          "$ref": "#/$defs/HopKind"
+        },
+        "evidence": {
+          "description": "Evidence values.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          }
+        },
+        "confidence": {
+          "description": "How sure the finding is.",
+          "$ref": "#/$defs/Confidence"
+        },
+        "hint": {
+          "description": "Remediation hint.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "hop",
+        "evidence",
+        "confidence"
+      ]
+    },
+    "Severity": {
+      "description": "Severity of a finding.",
+      "oneOf": [
+        {
+          "description": "Informational.",
+          "type": "string",
+          "const": "info"
+        },
+        {
+          "description": "Quality or features are lost.",
+          "type": "string",
+          "const": "warning"
+        },
+        {
+          "description": "The path doesn't work as the app expects.",
+          "type": "string",
+          "const": "error"
+        }
+      ]
+    },
+    "Evidence": {
+      "description": "One evidence value behind a finding.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "description": "What the value is, e.g. `sink.hdr.eotfs`.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value as JSON."
+        },
+        "provenance": {
+          "description": "Where it came from.",
+          "$ref": "#/$defs/Provenance"
+        }
+      },
+      "required": [
+        "label",
+        "value",
+        "provenance"
+      ]
+    },
+    "Hint": {
+      "description": "A remediation hint, keyed by distro family and, for display findings, by compositor.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "description": "What to do.",
+          "type": "string"
+        },
+        "distro_family": {
+          "description": "The distro family the hint was written for; `None` for the generic fallback.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DistroFamily"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compositor": {
+          "description": "The compositor the hint was written for; `None` when it applies to any compositor.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositorKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  }
+}
