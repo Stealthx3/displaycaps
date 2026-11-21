@@ -418,7 +418,9 @@ impl HdmiForum {
             4 => Some((8, 340)),
             5 => Some((8, 400)),
             6 => Some((12, 400)),
-            _ => Some((12, 600)),
+            7 => Some((16, 400)),
+            // 8–15 are reserved.
+            _ => None,
         }
     }
 }

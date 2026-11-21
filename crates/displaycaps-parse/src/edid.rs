@@ -343,11 +343,12 @@ fn displayid_cta_blocks(blk: &[u8]) -> Vec<crate::cta_video::CtaVideo> {
 fn redact_displayid(blk: &mut [u8]) -> bool {
     // blk[1] version, blk[2] bytes in section, blk[3] product type, blk[4] extension count,
     // data blocks from blk[5]; the section checksum follows the data blocks.
-    let len = usize::from(blk[2]);
+    // A declared length past the block is clamped, as the parser (and edid-decode) do, so every
+    // block the parser decodes is also redacted. The section checksum then has no room and is left.
+    let declared = usize::from(blk[2]);
+    let len = declared.min(BLOCK - 1 - 5 - 1);
     let end = 5 + len;
-    if end >= BLOCK - 1 {
-        return false;
-    }
+    let section_checksum = declared == len;
     let mut found = false;
     let mut i = 5;
     while i + 3 <= end {
@@ -357,8 +358,10 @@ fn redact_displayid(blk: &mut [u8]) -> bool {
             break;
         }
         // Per-unit identifiers: the product-ID serial (3-byte id, 2-byte product, 4-byte serial),
-        // the tiled-topology tile serial (payload bytes 18..22) and the ContainerID UUID.
+        // the tiled-topology tile serial (payload bytes 18..22), the ContainerID UUID and the
+        // DisplayID 1.x ASCII serial number block (0x0A).
         let range = match tag {
+            0x0A if plen > 0 => Some(payload..payload + plen),
             0x00 | 0x20 if plen >= 9 => Some(payload + 5..payload + 9),
             0x12 | 0x28 if plen >= 22 => Some(payload + 18..payload + 22),
             0x29 if plen >= 16 => Some(payload..payload + 16),
@@ -374,8 +377,10 @@ fn redact_displayid(blk: &mut [u8]) -> bool {
         i = payload + plen;
     }
     if found {
-        let sum: u32 = blk[1..end].iter().map(|&b| u32::from(b)).sum();
-        blk[end] = ((256 - (sum % 256)) % 256) as u8;
+        if section_checksum {
+            let sum: u32 = blk[1..end].iter().map(|&b| u32::from(b)).sum();
+            blk[end] = ((256 - (sum % 256)) % 256) as u8;
+        }
         let sum: u32 = blk[..BLOCK - 1].iter().map(|&b| u32::from(b)).sum();
         blk[BLOCK - 1] = ((256 - (sum % 256)) % 256) as u8;
     }

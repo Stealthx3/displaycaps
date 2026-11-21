@@ -59,7 +59,8 @@ Never two L sessions back to back where limits are tight; Phase 2 is the largest
 - 2026-11-21 — Plan created from AudioCaps' plan. Task 1.4 (data model and schema v1) runs in the main thread on the top tier.
 - 2026-11-21 — Copying the backends/rules/cli/ffi crates was delegated to one sonnet agent (≈290k tokens, 11 min); it worked from a scratchpad export of AudioCaps v1.0.0 and its own lab directory.
 - 2026-11-21 — Gate review by the opus reviewer agent (≈100k tokens) found 11 issues, including two the gate scripts couldn't see (passive checker blind to hex paths; device UUID in a fixture). Keep it for every gate.
+- 2026-11-21 — Phase 2: three sonnet implementer agents in parallel on disjoint parser files (timing/tables ≈234k tokens, CTA video ≈132k, DisplayID ≈187k), against a layout set in the main thread; integration, sink mapping and the differential harness in the main thread. The differential test found 3 real bugs the agents' own oracle checks missed (VIC 39, CTA-in-DisplayID, VIC 0) and 4 extractor gaps.
 - 2026-11-21 — New tools: oracles.sh, parity-vectors.mjs, parity-audiocaps.sh, check-passive.sh (DRM rules), desktop-session.sh.
 
 ## Handoff
-Phase 1 at its gate on `feat/phase-1-scaffold-copied-foundation` (pushed; not merged). The HTPC is out of scope (lab-simulated tests only); 2.7 and 4.3 need simulated equivalents. Next after approval: merge, then phase 2 (EDID video blocks, differential tests against the oracles). Lab: main and desktop guests both shut down; desktop snapshot `desktops` has GNOME/Plasma/Sway.
+Phase 2 at its gate on `feat/phase-2-edid-video-parser`: parser, sink record, differential tests and fuzzing done; waiting for the maintainer. Next: phase 3 (sysfs and KMS backend; read-only, strace-checked). Lab: main running the fuzz run; desktop shut down.

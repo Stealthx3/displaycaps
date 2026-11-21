@@ -79,6 +79,9 @@ for raw in sys.stdin:
         mode("std", s)
     elif s.startswith("DTD") and block_kind in ("base", "cta"):
         mode("dtd", s)
+        if block_kind == "base" and s.startswith("DTD 1:"):
+            m = re.search(r"(\d+)x(\d+)(i?)\s+([\d.]+) Hz", s)
+            add(f"preferred {m.group(1)}x{m.group(2)}{m.group(3)} {float(m.group(4)):.3f}")
     elif section and "CVT 3 Byte" in section and re.match(r"CVT", s):
         mode("cvt3", s)
     elif section and "Established timings III" in section and s.startswith("DMT"):
@@ -86,6 +89,8 @@ for raw in sys.stdin:
     elif re.match(r"VIC\s+\d+", s) and section and "Video Data Block" in section and "4:2:0" not in section:
         n = int(re.match(r"VIC\s+(\d+)", s).group(1))
         add("vic", n)
+        if s.endswith("(native)"):
+            add("vic native", n)
         mode("vic", s)
     elif re.match(r"VIC\s+\d+", s) and section == "YCbCr 4:2:0 Video Data Block":
         add("vic420only", int(re.match(r"VIC\s+(\d+)", s).group(1)))
@@ -109,6 +114,9 @@ for raw in sys.stdin:
         add("colorimetry", s)
     if s in EOTF:
         add("eotf", EOTF[s])
+    m = re.match(r"Desired content (max|max frame-average|min) luminance: (\d+) ", s)
+    if m:
+        add("hdr lum", {"max": "max", "max frame-average": "fall", "min": "min"}[m.group(1)], m.group(2))
     # HDMI and HDMI Forum
     if section and "OUI 00-0C-03" in section:
         if s.startswith("Maximum TMDS clock:"):
@@ -131,6 +139,17 @@ for raw in sys.stdin:
                 add(f"hf frl {lanes[-1]}x{rates[-1]}")
         elif s == "Supports Auto Low-Latency Mode":
             add("hf allm")
+        elif re.match(r"Supports (\d+)-bits/component Deep Color 4:2:0", s):
+            add("hf dc420", re.match(r"Supports (\d+)", s).group(1))
+        elif re.match(r"Supports (\d+) bpc Compressed Video Transport", s):
+            add("hf dsc bpc", re.match(r"Supports (\d+)", s).group(1))
+        elif s.startswith("DSC Max Slices:"):
+            add("hf dsc slices", re.search(r"up to (\d+) slices", s).group(1))
+        elif s.startswith("DSC Max Fixed Rate Link:"):
+            lanes = re.findall(r"on (\d) lanes", s)
+            rates = re.findall(r"(\d+) Gbps", s)
+            if lanes and rates:
+                add(f"hf dscfrl {lanes[-1]}x{rates[-1]}")
         elif s.startswith("VRRmin:"):
             vmin = re.search(r"(\d+) Hz", s).group(1)
             facts.add(f"hf vrrmin {vmin}")
@@ -147,8 +166,16 @@ for raw in sys.stdin:
             add("freesync max", re.search(r"(\d+) Hz", s).group(1))
     if section and "Video Data Block (Dolby)" in section and s.startswith("Version:"):
         add("dv version", re.match(r"Version: (\d+)", s).group(1))
+    if section and "Video Data Block (Dolby)" in section:
+        m = re.match(r"Target (Max|Min) PQ v\d: (\d+)", s)
+        if m:
+            add("dv pq", m.group(1).lower(), m.group(2))
     if section and "OUI 90-84-8B" in section and s.startswith("Application Version:"):
         add("hdr10plus", s.split(":")[1].strip())
+    if section and "OUI 90-84-8B" in section:
+        m = re.match(r"(Full Frame Peak|Peak) Luminance Index: (\d+)", s)
+        if m:
+            add("hdr10plus", "ffpeak" if m.group(1).startswith("Full") else "peak", m.group(2))
 
 for f in sorted(facts):
     print(f)

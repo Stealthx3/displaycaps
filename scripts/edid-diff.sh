@@ -8,6 +8,9 @@
 # for displaycaps-parse). A difference is accepted only when tests/fixtures/edid-corpus/triage.tsv
 # lists it: <corpus file name> TAB <fact line, prefixed + (only ours) or - (edid-decode has it, we lack it)> TAB <reason>.
 # Where the two oracles disagree and we match one of them, the case is listed as an oracle split.
+# Facts are a set per EDID (not per block): two blocks stating the same fact count once.
+# Not compared yet: DisplayID tiles, adaptive-sync and parameter blocks, HDMI 3D, Dolby Vision
+# primaries (unit tests cover them).
 # Corpus: committed EDIDs (tests/fixtures/edid-corpus, tests/fixtures/parity/edid) plus the oracles'
 # own test data from their pinned checkouts (lab only, not committed). Outputs in target/oracles/diff/.
 set -uo pipefail
@@ -35,6 +38,8 @@ for f in "${files[@]}"; do
   "$ED" --skip-hex-dump "$f" 2>/dev/null | python3 scripts/edid_facts_oracle.py > "$out/$name.ed"
   "$DI" < "$f" 2>/dev/null | python3 scripts/edid_facts_oracle.py > "$out/$name.di"
   "$OURS" "$f" > "$out/$name.ours" 2>"$out/$name.err" || echo "!parse-failed" >> "$out/$name.ours"
+  # An empty primary-oracle result would turn every fact into a silent split: fail instead.
+  [ -s "$out/$name.ed" ] || echo "!edid-decode-empty" >> "$out/$name.ours"
   if ! cmp -s "$out/$name.ed" "$out/$name.di"; then oracle_split=$((oracle_split + 1)); fi
   # edid-decode is the primary oracle: a fact it reports that we lack is a difference ("-"), and so
   # is a fact we report that neither oracle has ("+"). Facts only di-edid-decode reports, and facts

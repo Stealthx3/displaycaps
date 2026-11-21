@@ -32,7 +32,7 @@ Open items (not phase tasks):
 - [x] **2.4** DisplayID 1.3 and 2.x
 - [x] **2.5** Sink record and quirk packs
 - [x] **2.6** Differential tests against both oracles over the corpus; fuzz targets for every block parser
-- [ ] **2.7** Gate: corpus agrees with the oracles or every difference is triaged; HTPC TV and receiver identified; fuzz runs clean
+- [ ] **2.7** Gate: corpus agrees with the oracles or every difference is triaged; the HTPC's TV identified from its existing capture (receiver: HTPC out of scope, see open items); fuzz runs clean
 
 ## Phase 3 — sysfs and KMS backend (about 3 weeks)
 

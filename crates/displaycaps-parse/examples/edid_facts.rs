@@ -49,6 +49,15 @@ fn main() {
     if let Some(n) = e.base.product_name() {
         add(format!("name {n}"));
     }
+    if let Some(t) = e.base.detailed.first() {
+        add(format!(
+            "preferred {}x{}{} {}",
+            t.h_active,
+            t.height(),
+            if t.interlaced { "i" } else { "" },
+            hz(t.refresh_millihz())
+        ));
+    }
     for m in modes(&e.base) {
         let src = match m.source {
             ModeSource::Established => "est",
@@ -91,6 +100,9 @@ fn main() {
         // VIC 0 is reserved; an SVD carrying it names no format.
         for s in v.svds.iter().filter(|s| s.vic != 0) {
             add(format!("vic {}", s.vic));
+            if s.native {
+                add(format!("vic native {}", s.vic));
+            }
             if let Some(t) = vic::vic(s.vic) {
                 add(mode(
                     "vic",
@@ -105,13 +117,14 @@ fn main() {
         for s in &v.y420_only {
             add(format!("vic420only {}", s.vic));
         }
-        if let Some(map) = &v.y420_cap_map {
-            for (i, s) in v.svds.iter().enumerate() {
-                let set = map.is_empty() || map.get(i / 8).is_some_and(|b| b & (1 << (i % 8)) != 0);
-                if set {
-                    add(format!("vic420cap {}", s.vic));
-                }
-            }
+        // The capability-map VICs are the library's 4:2:0-capable set minus the 4:2:0-only ones.
+        let only: Vec<u8> = v.y420_only.iter().map(|s| s.vic).collect();
+        for n in v
+            .y420_capable_vics()
+            .into_iter()
+            .filter(|n| !only.contains(n))
+        {
+            add(format!("vic420cap {n}"));
         }
         if let Some(cap) = &v.capability {
             add(format!("vcdb qy {}", u8::from(cap.qy)));
@@ -136,6 +149,15 @@ fn main() {
             }
         }
         if let Some(h) = &v.hdr_static {
+            for (raw, k) in [
+                (h.max_luminance_raw, "max"),
+                (h.max_frame_avg_raw, "fall"),
+                (h.min_luminance_raw, "min"),
+            ] {
+                if let Some(r) = raw {
+                    add(format!("hdr lum {k} {r}"));
+                }
+            }
             for (on, name) in [
                 (h.eotf_sdr, "sdr"),
                 (h.eotf_hdr_gamma, "hdr"),
@@ -188,6 +210,28 @@ fn main() {
             if hf.allm {
                 add("hf allm".into());
             }
+            for (on, b) in [
+                (hf.dc_30bit_420, 10),
+                (hf.dc_36bit_420, 12),
+                (hf.dc_48bit_420, 16),
+            ] {
+                if on {
+                    add(format!("hf dc420 {b}"));
+                }
+            }
+            for (on, b) in [(hf.dsc_10bpc, 10), (hf.dsc_12bpc, 12), (hf.dsc_16bpc, 16)] {
+                if on {
+                    add(format!("hf dsc bpc {b}"));
+                }
+            }
+            if hf.dsc_1p2
+                && let Some((s, _)) = hf.dsc_max_slices()
+            {
+                add(format!("hf dsc slices {s}"));
+            }
+            if let Some((lanes, gbps)) = hf.dsc_max_frl.lanes_and_gbps() {
+                add(format!("hf dscfrl {lanes}x{gbps}"));
+            }
             if hf.vrr_min > 0 {
                 add(format!("hf vrrmin {}", hf.vrr_min));
             }
@@ -207,9 +251,17 @@ fn main() {
         }
         if let Some(dv) = &v.dolby_vision {
             add(format!("dv version {}", dv.version));
+            if let Some(p) = dv.target_max_pq {
+                add(format!("dv pq max {p}"));
+            }
+            if let Some(p) = dv.target_min_pq {
+                add(format!("dv pq min {p}"));
+            }
         }
         if let Some(p) = &v.hdr10_plus {
             add(format!("hdr10plus {}", p.application_version));
+            add(format!("hdr10plus peak {}", p.peak_index));
+            add(format!("hdr10plus ffpeak {}", p.full_frame_peak_index));
         }
     }
     for d in &e.displayid {

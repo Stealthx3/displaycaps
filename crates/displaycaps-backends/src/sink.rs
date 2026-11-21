@@ -45,11 +45,20 @@ pub fn sink_record(
     };
     let e = match parse_edid(raw) {
         Ok(e) => e,
-        Err(err) => return Some(unreadable(format!("{err:?}"))),
+        Err(err) => {
+            return Some(unreadable(
+                format!("{err:?}"),
+                fields.includes(&FieldGroup::Link),
+            ));
+        }
     };
     let want = |g: FieldGroup| fields.includes(&g);
 
-    let identity = identity(&e, raw, &prov, now);
+    let identity = if want(FieldGroup::Identity) {
+        identity(&e, raw, &prov, now)
+    } else {
+        not_requested_identity()
+    };
     let names: Vec<&str> = e.name.iter().map(String::as_str).collect();
     let applied = quirks.matching(&SinkKey {
         manufacturer: e.manufacturer.as_deref(),
@@ -65,7 +74,8 @@ pub fn sink_record(
         .map(|c| &c.video)
         .chain(e.displayid_cta.iter())
         .collect();
-    if want(FieldGroup::Modes) {
+    // Modes are worked out once (VRR needs them too) and reported only when in scope.
+    let all_modes = {
         let mut modes = modes(&e, &ctas);
         for q in &applied {
             for eff in &q.effects {
@@ -82,10 +92,13 @@ pub fn sink_record(
                 }
             }
         }
-        video.modes = Some(Value::measured(modes, prov.clone()));
+        modes
+    };
+    if want(FieldGroup::Modes) {
+        video.modes = Some(Value::measured(all_modes.clone(), prov.clone()));
     }
     if want(FieldGroup::Vrr) {
-        video.vrr = Some(match vrr(&e, &ctas) {
+        video.vrr = Some(match vrr(&e, &ctas, &all_modes) {
             Some(r) => Value::measured(r, prov.clone()),
             None => Value::unknown(
                 UnknownReason::NotExposed,
@@ -118,7 +131,20 @@ pub fn sink_record(
         });
     }
     let link = if want(FieldGroup::Link) {
-        Value::measured(link(&e, &ctas), prov.clone())
+        match link(&e, &ctas) {
+            (l, false) => Value::measured(l, prov.clone()),
+            // The TMDS limit came from the HDMI 1.x baseline, not from the EDID.
+            (l, true) => Value::inferred(
+                l,
+                Provenance {
+                    layer: LayerKind::SinkChain,
+                    source: Source::derived(
+                        "EDID, with the HDMI 1.x 165 MHz TMDS baseline (no limit stated)",
+                    ),
+                    read_at_ms: now,
+                },
+            ),
+        }
     } else {
         Value::unknown(
             UnknownReason::NotRequested,
@@ -139,7 +165,24 @@ pub fn sink_record(
     })
 }
 
-fn unreadable(detail: String) -> SinkRecord {
+fn not_requested_identity() -> SinkIdentity {
+    fn n<T>() -> Value<T> {
+        Value::unknown(
+            UnknownReason::NotRequested,
+            Some("identity field group not in scope".into()),
+        )
+    }
+    SinkIdentity {
+        manufacturer_id: n(),
+        manufacturer_name: n(),
+        product_code: n(),
+        model_name: n(),
+        serial: None,
+        sink_key: n(),
+    }
+}
+
+fn unreadable(detail: String, link_in_scope: bool) -> SinkRecord {
     fn u<T>(d: &str) -> Value<T> {
         Value::unknown(UnknownReason::ParseError, Some(d.to_string()))
     }
@@ -154,7 +197,14 @@ fn unreadable(detail: String) -> SinkRecord {
         },
         edid: u(&detail),
         video: CapabilitySet::default(),
-        link: u(&detail),
+        link: if link_in_scope {
+            u(&detail)
+        } else {
+            Value::unknown(
+                UnknownReason::NotRequested,
+                Some("link field group not in scope".into()),
+            )
+        },
         chain: u(&detail),
         quirks: vec![],
     }
@@ -472,22 +522,32 @@ fn modes(e: &Edid, ctas: &[&CtaVideo]) -> Vec<Mode> {
 }
 
 /// HDMI 2.1 VRR wins over FreeSync, which wins over DisplayID adaptive sync.
-fn vrr(e: &Edid, ctas: &[&CtaVideo]) -> Option<VrrRange> {
+///
+/// HDMI's VRRmax of 0 means "up to each video format's own frame rate", so the range is reported
+/// for the preferred resolution: up to its highest listed refresh.
+fn vrr(e: &Edid, ctas: &[&CtaVideo], modes: &[Mode]) -> Option<VrrRange> {
     if let Some(hf) = ctas.iter().find_map(|c| c.hdmi_forum())
         && hf.vrr_min > 0
     {
+        let min = u32::from(hf.vrr_min) * 1000;
         let max = if hf.vrr_max > 0 {
-            u32::from(hf.vrr_max)
+            Some(u32::from(hf.vrr_max) * 1000)
         } else {
-            // VRRmax 0: the highest refresh of the modes the sink lists (HDMI 2.1 §10.3).
-            let modes = modes(e, ctas);
-            modes.iter().map(|m| m.refresh_millihz).max().unwrap_or(0) / 1000
+            modes.iter().find(|m| m.preferred).and_then(|p| {
+                modes
+                    .iter()
+                    .filter(|m| (m.width, m.height, m.interlaced) == (p.width, p.height, false))
+                    .map(|m| m.refresh_millihz)
+                    .max()
+            })
         };
-        return Some(VrrRange {
-            min_millihz: u32::from(hf.vrr_min) * 1000,
-            max_millihz: max * 1000,
-            kind: VrrKind::HdmiVrr,
-        });
+        if let Some(max) = max.filter(|m| *m > min) {
+            return Some(VrrRange {
+                min_millihz: min,
+                max_millihz: max,
+                kind: VrrKind::HdmiVrr,
+            });
+        }
     }
     if let Some(fs) = ctas.iter().find_map(|c| c.freesync.as_ref())
         && fs.min_hz > 0
@@ -537,7 +597,12 @@ fn color_formats(e: &Edid, ctas: &[&CtaVideo]) -> Vec<ColorFormatSupport> {
         format: ColorFormat::Rgb,
         bit_depths: rgb.clone(),
     }];
-    if ctas.iter().any(|c| c.ycbcr444) {
+    // YCbCr support: the CTA-861 header flags, or the EDID 1.4 base-block colour encodings.
+    let (base444, base422) = match e.base.features.color {
+        timing::DisplayColor::Digital { ycbcr444, ycbcr422 } => (ycbcr444, ycbcr422),
+        _ => (false, false),
+    };
+    if base444 || ctas.iter().any(|c| c.ycbcr444) {
         out.push(ColorFormatSupport {
             format: ColorFormat::Ycbcr444,
             bit_depths: if hdmi.is_some_and(|h| h.dc_y444) {
@@ -547,11 +612,16 @@ fn color_formats(e: &Edid, ctas: &[&CtaVideo]) -> Vec<ColorFormatSupport> {
             },
         });
     }
-    if ctas.iter().any(|c| c.ycbcr422) {
-        // 4:2:2 carries up to 12 bits at the 8-bit rate on HDMI.
+    if base422 || ctas.iter().any(|c| c.ycbcr422) {
+        // On HDMI, 4:2:2 always carries up to 12 bits (at the 8-bit rate); elsewhere it follows
+        // the stated bit depths.
         out.push(ColorFormatSupport {
             format: ColorFormat::Ycbcr422,
-            bit_depths: vec![8, 10, 12],
+            bit_depths: if hdmi.is_some() {
+                vec![8, 10, 12]
+            } else {
+                rgb.clone()
+            },
         });
     }
     if ctas.iter().any(|c| !c.y420_capable_vics().is_empty()) {
@@ -620,13 +690,25 @@ fn hdr(
         }
         for d in &c.hdr_dynamic {
             any = true;
-            // Types 2 and 4 are HDR10+ and its successor; they are already listed via their VSVDB.
-            h.dynamic.push(DynamicHdr::Other {
+            // Type 4 (SMPTE ST 2094-40) is HDR10+, already listed through its vendor block.
+            if d.kind == 4 && c.hdr10_plus.is_some() {
+                continue;
+            }
+            let other = DynamicHdr::Other {
                 metadata_type: d.kind,
-            });
+            };
+            if !h.dynamic.contains(&other) {
+                h.dynamic.push(other);
+            }
         }
     }
-    h.formats.dedup();
+    let mut formats = Vec::new();
+    for f in h.formats.drain(..) {
+        if !formats.contains(&f) {
+            formats.push(f);
+        }
+    }
+    h.formats = formats;
     if !any {
         return Value::unknown(
             UnknownReason::NotExposed,
@@ -652,6 +734,8 @@ fn hdr(
     Value::measured(h, prov.clone())
 }
 
+/// `Default` (BT.709 / sRGB) is always supported; the CTA "default RGB" and "sRGB" bits only
+/// restate it, so they fold into `Default`.
 fn colorimetry(ctas: &[&CtaVideo]) -> Vec<Colorimetry> {
     let mut out = vec![Colorimetry::Default];
     for c in ctas.iter().filter_map(|c| c.colorimetry.as_ref()) {
@@ -675,15 +759,17 @@ fn colorimetry(ctas: &[&CtaVideo]) -> Vec<Colorimetry> {
     out
 }
 
-fn link(e: &Edid, ctas: &[&CtaVideo]) -> LinkLimits {
+/// The link limits, and whether the TMDS limit is the HDMI 1.x baseline (not stated in the EDID).
+fn link(e: &Edid, ctas: &[&CtaVideo]) -> (LinkLimits, bool) {
     let hdmi = ctas.iter().find_map(|c| c.hdmi.as_ref());
     let hf = ctas.iter().find_map(|c| c.hdmi_forum());
-    let tmds = hf
+    let stated = hf
         .map(|h| h.max_tmds_mhz)
         .filter(|m| *m > 0)
-        .or_else(|| hdmi.and_then(|h| h.max_tmds_mhz))
-        // An HDMI sink without a stated limit is held to the HDMI 1.x 165 MHz baseline.
-        .or(hdmi.map(|_| 165));
+        .or_else(|| hdmi.and_then(|h| h.max_tmds_mhz));
+    // An HDMI sink without a stated limit is held to the HDMI 1.x 165 MHz baseline.
+    let defaulted = stated.is_none() && hdmi.is_some();
+    let tmds = stated.or(hdmi.map(|_| 165));
     let frl = |r: &displaycaps_parse::cta_video::FrlRate| {
         r.lanes_and_gbps().map(|(lanes, gbps)| FrlRate {
             lanes,
@@ -705,18 +791,21 @@ fn link(e: &Edid, ctas: &[&CtaVideo]) -> LinkLimits {
         max_frl: frl(&h.dsc_max_frl),
         max_slices: h.dsc_max_slices().map(|(s, _)| s),
     });
+    // 4:2:2's 12 bits ride at the 8-bit rate, so the bit-depth limit comes from RGB and 4:4:4.
     let max_bpc = color_formats(e, ctas)
         .iter()
+        .filter(|c| matches!(c.format, ColorFormat::Rgb | ColorFormat::Ycbcr444))
         .flat_map(|c| c.bit_depths.iter().copied())
         .max();
-    LinkLimits {
+    let limits = LinkLimits {
         max_tmds_character_rate_khz: tmds.map(|m| u32::from(m) * 1000),
         max_frl: hf.and_then(|h| frl(&h.max_frl)),
         max_dp: None,
         dsc,
         allm: hf.map(|h| h.allm),
         max_bpc,
-    }
+    };
+    (limits, defaulted)
 }
 
 #[cfg(test)]

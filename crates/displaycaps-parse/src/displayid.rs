@@ -666,9 +666,15 @@ fn luminance(v: u32) -> Option<f32> {
     if v & 0x8000 != 0 {
         return None;
     }
-    let exp = ((v & 0x7C00) >> 10) as i32 - 15;
-    let fract = (v & 0x3FF) | 0x400;
-    Some(2f32.powi(exp) * fract as f32 / 1024.0)
+    // IEEE 754 half precision (sign bit already rejected): exponent 0 is subnormal (no implicit
+    // leading 1, scale 2^-14), exponent 31 is infinity or NaN.
+    let e = (v & 0x7C00) >> 10;
+    let m = (v & 0x3FF) as f32;
+    match e {
+        0 => Some(2f32.powi(-14) * m / 1024.0),
+        31 => None,
+        _ => Some(2f32.powi(e as i32 - 15) * (1.0 + m / 1024.0)),
+    }
 }
 
 fn text(p: &[u8]) -> String {
@@ -1362,7 +1368,7 @@ impl Out<'_> {
             width,
             height,
             refresh_millihz: (1 + u32::from(d[2] & 0x7F)) * 1000,
-            interlaced: false,
+            interlaced: d[2] & 0x80 != 0,
             preferred: d[0] & 0x80 != 0,
             pixel_clock_khz: 0,
             h_total: 0,
