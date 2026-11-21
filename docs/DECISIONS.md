@@ -29,3 +29,4 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-21** · note · GitHub still serves the old commit by its SHA until its own garbage collection; a purge needs a GitHub Support request
 - **2026-11-21** · decision · Skip the HTPC: no capture or test on the production rig; use simulated tests in the lab only — _why:_ maintainer's instruction at the phase 1 gate
 - **2026-11-21** · approval · Approved the phase 1 gate; merge to main and start phase 2
+- **2026-11-21** · change · Lab guest disks and base volumes live in libvirt pool VMDisks, not the default pool — _why:_ keep lab disks off the system drive
