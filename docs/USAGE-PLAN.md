@@ -63,4 +63,4 @@ Never two L sessions back to back where limits are tight; Phase 2 is the largest
 - 2026-11-21 — New tools: oracles.sh, parity-vectors.mjs, parity-audiocaps.sh, check-passive.sh (DRM rules), desktop-session.sh.
 
 ## Handoff
-Phase 2 at its gate on `feat/phase-2-edid-video-parser`: parser, sink record, differential tests and fuzzing done; waiting for the maintainer. Next: phase 3 (sysfs and KMS backend; read-only, strace-checked). Lab: main running the fuzz run; desktop shut down.
+Phase 2 at its gate on `feat/phase-2-edid-video-parser`, all items met (fuzz 2h clean, diff 171/171); waiting for the maintainer. Next: phase 3 (sysfs and KMS backend; read-only, strace-checked). Lab: main idle; desktop shut down.

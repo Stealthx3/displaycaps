@@ -30,3 +30,8 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-21** · decision · Skip the HTPC: no capture or test on the production rig; use simulated tests in the lab only — _why:_ maintainer's instruction at the phase 1 gate
 - **2026-11-21** · approval · Approved the phase 1 gate; merge to main and start phase 2
 - **2026-11-21** · change · Lab guest disks and base volumes live in libvirt pool VMDisks, not the default pool — _why:_ keep lab disks off the system drive
+- **2026-11-21** · decision · edid-decode is the primary oracle; facts only di-edid-decode reports are listed as oracle splits, not failures — _why:_ edid-decode covers more blocks; libdisplay-info omits several _(by claude)_
+- **2026-11-21** · decision · GTF standard timings resolved as edid-decode does — _why:_ matches the primary oracle _(by claude)_
+- **2026-11-21** · decision · HDMI Forum VRRmax 0 is resolved by the preferred resolution's highest refresh, marked inferred — _why:_ never overstate a VRR range the TV does not state _(by claude)_
+- **2026-11-21** · decision · Phase 2 fuzz run: 2 hours per target on the final code (about 905M executions, 0 crashes) _(by claude)_
+- **2026-11-21** · decision · Gate 2.7's HTPC part met by the TV from AudioCaps' existing HTPC capture (Hisense, HEC 41008); the receiver was never captured and is out of scope — _why:_ maintainer ruled out the HTPC _(by claude)_
