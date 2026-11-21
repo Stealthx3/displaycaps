@@ -232,8 +232,7 @@ mod tests {
     #[test]
     fn ips_host_user() {
         let r = Redactor::new(Some("lab-host"), Some("alex"));
-        let t =
-            r.text("sink 192.0.2.12 on lab-host by alex; lo 127.0.0.1; fe80::1c2b:3aff:fe4d:1"); // pii-scan: allow (synthetic addresses in a redaction test)
+        let t = r.text("sink 192.0.2.12 on lab-host by alex; lo 127.0.0.1; fe80::1c2b:3aff:fe4d:1"); // pii-scan: allow (synthetic addresses in a redaction test)
         assert_eq!(
             t,
             "sink redacted-ipv4 on redacted-host by redacted-user; lo 127.0.0.1; redacted-ipv6"

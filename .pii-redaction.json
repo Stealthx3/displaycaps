@@ -4,6 +4,12 @@
     "handle": "Stealthx3",
     "email": "6005279+Stealthx3@users.noreply.github.com"
   },
-  "allow": ["and", "51 Franklin Street"],
-  "skip": ["scripts/lab.sh"]
+  "allow": [
+    "and",
+    "51 Franklin Street",
+    "0000:0a:00"
+  ],
+  "skip": [
+    "scripts/lab.sh"
+  ]
 }

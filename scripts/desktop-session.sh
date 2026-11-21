@@ -9,7 +9,7 @@ set -euo pipefail
 want="${1:?gnome|plasma|sway}"
 case "$want" in
   gnome) s=gnome; ready=(gnome-shell) ;;
-  plasma) s=plasma; ready=(kwin_wayland plasmashell) ;;
+  plasma) s=plasma; ready=(kwin_wayland) ;;   # plasmashell needs GPU GL; KWin holds the output state
   sway) s=sway; ready=(sway) ;;
   *) exit 2 ;;
 esac

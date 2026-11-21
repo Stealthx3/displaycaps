@@ -1,0 +1,96 @@
+{
+  "format": 1,
+  "tool_version": "0.1.0",
+  "captured_at_ms": 1795262827698,
+  "sandbox": {
+    "snap": false,
+    "flatpak": false
+  },
+  "file_count": 22,
+  "commands": [
+    {
+      "name": "drm_info",
+      "argv": [
+        "drm_info",
+        "-j"
+      ],
+      "exit_code": 0,
+      "output_file": "drm_info.json"
+    },
+    {
+      "name": "wayland-info",
+      "argv": [
+        "wayland-info"
+      ],
+      "exit_code": 0,
+      "output_file": "wayland-info.txt"
+    },
+    {
+      "name": "kscreen-doctor",
+      "argv": [
+        "kscreen-doctor",
+        "-j"
+      ],
+      "skipped": "timed out after 5 s"
+    },
+    {
+      "name": "wlr-randr",
+      "argv": [
+        "wlr-randr",
+        "--json"
+      ],
+      "exit_code": 0,
+      "output_file": "wlr-randr.json"
+    },
+    {
+      "name": "mutter-displayconfig",
+      "argv": [
+        "gdbus",
+        "call",
+        "--session",
+        "--dest",
+        "org.gnome.Mutter.DisplayConfig",
+        "--object-path",
+        "/org/gnome/Mutter/DisplayConfig",
+        "--method",
+        "org.gnome.Mutter.DisplayConfig.GetCurrentState"
+      ],
+      "exit_code": 1
+    },
+    {
+      "name": "xrandr",
+      "argv": [
+        "xrandr",
+        "--current",
+        "--verbose"
+      ],
+      "exit_code": 1
+    },
+    {
+      "name": "vainfo",
+      "argv": [
+        "vainfo"
+      ],
+      "exit_code": 3,
+      "output_file": "vainfo.txt"
+    },
+    {
+      "name": "vulkaninfo",
+      "argv": [
+        "vulkaninfo",
+        "--summary"
+      ],
+      "exit_code": 0,
+      "output_file": "vulkaninfo.txt"
+    }
+  ],
+  "redaction": [
+    "MAC addresses replaced by stable pseudo addresses (02:..)",
+    "IPv4 (except loopback) and IPv6 addresses replaced",
+    "host name and user name of the capturing machine replaced",
+    "JSON values under keys containing 'serial' hashed; machine and session ids removed",
+    "EDID numeric serial and serial descriptor cleared, checksum fixed",
+    "DMI serials, product UUID and USB serial attributes are never collected"
+  ],
+  "notes": []
+}

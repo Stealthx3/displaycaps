@@ -1,0 +1,3 @@
+Trying display: wayland
+Trying display: x11
+Trying display: drm

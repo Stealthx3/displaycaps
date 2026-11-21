@@ -22,3 +22,4 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-21** · decision · Replace the maintainer's real name everywhere, including the NOTICE copyright (now Stealthx3), and absolute drive paths in CLAUDE.md
 - **2026-11-21** · decision · Rewrite the local, never-pushed history to remove personal values before the first push
 - **2026-11-21** · note · Lab host details stay out of docs/LAB.md; real values only in git-ignored docs/LAB.local.md
+- **2026-11-21** · action · Workstation capture run once on the host under check-passive.sh (approved exception): passed; drm_info not installed there, so no KMS dump
