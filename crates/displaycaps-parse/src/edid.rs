@@ -89,7 +89,7 @@ impl std::fmt::Display for EdidError {
 impl std::error::Error for EdidError {}
 
 /// A decoded EDID.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Edid {
     /// EDID version and revision, e.g. (1, 3).
     pub version: (u8, u8),
@@ -109,9 +109,13 @@ pub struct Edid {
     pub extension_count: u8,
     /// Whether the base-block checksum is valid.
     pub checksum_ok: bool,
+    /// The base block's video section: input, timings and descriptors.
+    pub base: crate::timing::BaseVideo,
     /// Decoded CTA-861 extension blocks.
     pub cta: Vec<CtaBlock>,
-    /// Tags of extension blocks that are present but not decoded (0x70 DisplayID, 0xF0 map …).
+    /// Decoded DisplayID extension blocks (tag 0x70).
+    pub displayid: Vec<crate::displayid::DisplayId>,
+    /// Tags of extension blocks that are present but not decoded (0xF0 block map, …).
     pub other_extensions: Vec<u8>,
     /// Announced extension blocks missing from the buffer.
     pub missing_extensions: u8,
@@ -140,7 +144,7 @@ impl Edid {
 }
 
 /// One CTA-861 extension block.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct CtaBlock {
     /// Index of the block in the EDID (1 = first extension).
     pub block: u8,
@@ -164,6 +168,8 @@ pub struct CtaBlock {
     pub extended_tags: Vec<u8>,
     /// The data block collection ran past its bounds.
     pub truncated: bool,
+    /// Video content: SVDs, 4:2:0 maps, colour, HDR, HDMI 2.1 and vendor video blocks.
+    pub video: crate::cta_video::CtaVideo,
 }
 
 /// HDMI Licensing VSDB (OUI 00-0C-03).
@@ -264,12 +270,13 @@ pub fn parse_edid(b: &[u8]) -> Result<Edid, EdidError> {
     let n = usize::from(extension_count).min(available);
     let mut cta = Vec::new();
     let mut other_extensions = Vec::new();
+    let mut displayid = Vec::new();
     for i in 1..=n {
         let blk = &b[i * BLOCK..(i + 1) * BLOCK];
-        if blk[0] == 0x02 {
-            cta.push(parse_cta(blk, i as u8));
-        } else {
-            other_extensions.push(blk[0]);
+        match blk[0] {
+            0x02 => cta.push(parse_cta(blk, i as u8)),
+            0x70 => displayid.push(crate::displayid::parse_displayid(blk)),
+            t => other_extensions.push(t),
         }
     }
     Ok(Edid {
@@ -282,7 +289,9 @@ pub fn parse_edid(b: &[u8]) -> Result<Edid, EdidError> {
         name,
         extension_count,
         checksum_ok: checksum_ok(&b[..BLOCK]),
+        base: crate::timing::parse_base_video(&b[..BLOCK]),
         cta,
+        displayid,
         other_extensions,
         missing_extensions: extension_count.saturating_sub(n as u8),
     })
@@ -368,6 +377,7 @@ pub fn parse_cta(blk: &[u8], index: u8) -> CtaBlock {
         return c;
     }
     c.revision = blk[1];
+    c.video = crate::cta_video::parse_cta_video(blk);
     c.basic_audio = blk[3] & 0x40 != 0;
     c.checksum_ok = blk.len() == BLOCK && checksum_ok(blk);
     // Byte 2: offset of the first detailed timing; data blocks live in 4..d. 0 means none.
