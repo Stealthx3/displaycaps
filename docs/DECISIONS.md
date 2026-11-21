@@ -25,3 +25,5 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-21** · action · Workstation capture run once on the host under check-passive.sh (approved exception): passed; drm_info not installed there, so no KMS dump
 - **2026-11-21** · action · Created the public GitHub repo Stealthx3/displaycaps and published the progress page with GitHub Pages (also deploys from feat/phase-* branches)
 - **2026-11-21** · note · Repo check ignores tests/fixtures/ for folder-name case — _why:_ fixture trees mirror real sysfs names such as card1-HDMI-A-1 _(by claude)_
+- **2026-11-21** · action · Rewrote the pushed phase-1 branch history to replace the workstation GPU device UUIDs in a fixture, and force-pushed — _why:_ a per-board hardware id leaked into commit 24c5fcd
+- **2026-11-21** · note · GitHub still serves the old commit by its SHA until its own garbage collection; a purge needs a GitHub Support request
