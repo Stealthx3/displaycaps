@@ -26,14 +26,15 @@ pub enum EdidRedaction {
         numeric_serial: bool,
         /// Whether a serial-number descriptor (tag 0xFF) was present.
         serial_descriptor: bool,
-        /// Whether a DisplayID product identification block carried a non-zero serial.
+        /// Whether a DisplayID block carried a non-zero serial or ContainerID.
         displayid_serial: bool,
     },
 }
 
 /// Clears the numeric serial (bytes 12–15) and any serial-number display descriptor (tag 0xFF)
-/// in the EDID base block, and the serial of every DisplayID product identification block
-/// (tag 0x00 in DisplayID 1.x, 0x20 in 2.x) in DisplayID extension blocks, then fixes every
+/// in the EDID base block, and in DisplayID extension blocks the product identification serial
+/// (tag 0x00 / 0x20), the tiled-topology tile serial (0x12 / 0x28) and the ContainerID (0x29),
+/// then fixes every
 /// checksum it touched. Manufacturer, product code, name and other blocks are kept.
 pub fn redact_serials(edid: &mut [u8]) -> EdidRedaction {
     if edid.len() < BLOCK || edid[..8] != HEADER {
@@ -297,7 +298,8 @@ pub fn parse_edid(b: &[u8]) -> Result<Edid, EdidError> {
     })
 }
 
-/// Zeroes the product serial in a DisplayID extension block (EDID tag 0x70) and fixes the
+/// Zeroes the per-unit identifiers in a DisplayID extension block (EDID tag 0x70): the product
+/// serial, the tiled-topology tile serial and the ContainerID. Then fixes the
 /// DisplayID section checksum and the EDID block checksum. Returns whether a non-zero serial was
 /// found. Malformed sections are left as they are.
 fn redact_displayid(blk: &mut [u8]) -> bool {
@@ -316,12 +318,19 @@ fn redact_displayid(blk: &mut [u8]) -> bool {
         if payload + plen > end {
             break;
         }
-        // Product identification: 3-byte id, 2-byte product code, 4-byte serial.
-        if (tag == 0x00 || tag == 0x20) && plen >= 9 {
-            let serial = &mut blk[payload + 5..payload + 9];
-            if serial.iter().any(|&b| b != 0) {
+        // Per-unit identifiers: the product-ID serial (3-byte id, 2-byte product, 4-byte serial),
+        // the tiled-topology tile serial (payload bytes 18..22) and the ContainerID UUID.
+        let range = match tag {
+            0x00 | 0x20 if plen >= 9 => Some(payload + 5..payload + 9),
+            0x12 | 0x28 if plen >= 22 => Some(payload + 18..payload + 22),
+            0x29 if plen >= 16 => Some(payload..payload + 16),
+            _ => None,
+        };
+        if let Some(r) = range {
+            let field = &mut blk[r];
+            if field.iter().any(|&b| b != 0) {
                 found = true;
-                serial.fill(0);
+                field.fill(0);
             }
         }
         i = payload + plen;
@@ -572,6 +581,46 @@ mod tests {
         assert_eq!(&e[13..17], &[0, 0, 0, 0], "serial zeroed");
         assert_eq!(&e[5..13], &blk[..8], "id and product kept");
         assert_eq!(e[1..18].iter().map(|&x| u32::from(x)).sum::<u32>() % 256, 0);
+        assert_eq!(e.iter().map(|&x| u32::from(x)).sum::<u32>() % 256, 0);
+    }
+
+    #[test]
+    fn clears_tile_serial_and_container_id() {
+        let mut b = sample();
+        b.truncate(BLOCK);
+        b[126] = 1;
+        let mut ext = vec![0u8; BLOCK];
+        ext[0] = 0x70;
+        ext[1] = 0x20;
+        // A 0x28 tiled-topology block (22-byte payload) and a 0x29 ContainerID (16 bytes).
+        let mut tile = vec![0x28, 0x00, 22];
+        tile.extend((1..=22u8).collect::<Vec<_>>());
+        let mut cid = vec![0x29, 0x00, 16];
+        cid.extend([0xAB; 16]);
+        let body: Vec<u8> = tile.iter().chain(cid.iter()).copied().collect();
+        ext[2] = body.len() as u8;
+        ext[5..5 + body.len()].copy_from_slice(&body);
+        let end = 5 + body.len();
+        let s: u32 = ext[1..end].iter().map(|&x| u32::from(x)).sum();
+        ext[end] = ((256 - (s % 256)) % 256) as u8;
+        let s: u32 = ext[..127].iter().map(|&x| u32::from(x)).sum();
+        ext[127] = ((256 - (s % 256)) % 256) as u8;
+        b.extend_from_slice(&ext);
+        assert!(matches!(
+            redact_serials(&mut b),
+            EdidRedaction::Redacted {
+                displayid_serial: true,
+                ..
+            }
+        ));
+        let e = &b[BLOCK..];
+        assert_eq!(&e[8 + 18..8 + 22], &[0, 0, 0, 0], "tile serial zeroed");
+        assert_eq!(&e[8..8 + 18], &tile[3..21], "rest of the tile block kept");
+        assert_eq!(&e[33..49], &[0u8; 16], "ContainerID zeroed");
+        assert_eq!(
+            e[1..end + 1].iter().map(|&x| u32::from(x)).sum::<u32>() % 256,
+            0
+        );
         assert_eq!(e.iter().map(|&x| u32::from(x)).sum::<u32>() % 256, 0);
     }
 

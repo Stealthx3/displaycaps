@@ -26,10 +26,10 @@ Open items (not phase tasks):
 
 ## Phase 2 — EDID video parser and sink (about 4 weeks)
 
-- [ ] **2.1** Timings: detailed, standard and established timings, range limits, CVT/GTF, VICs, 4:2:0 maps, HDMI VICs
-- [ ] **2.2** Colour and HDR: video capability, colorimetry, HDR static and dynamic metadata, Dolby Vision, HDR10+
-- [ ] **2.3** HDMI 2.1: full HDMI Forum VSDB and Sink Capability block, DSC, VRR, ALLM
-- [ ] **2.4** DisplayID 1.3 and 2.x
+- [x] **2.1** Timings: detailed, standard and established timings, range limits, CVT/GTF, VICs, 4:2:0 maps, HDMI VICs
+- [x] **2.2** Colour and HDR: video capability, colorimetry, HDR static and dynamic metadata, Dolby Vision, HDR10+
+- [x] **2.3** HDMI 2.1: full HDMI Forum VSDB and Sink Capability block, DSC, VRR, ALLM
+- [x] **2.4** DisplayID 1.3 and 2.x
 - [ ] **2.5** Sink record and quirk packs
 - [ ] **2.6** Differential tests against both oracles over the corpus; fuzz targets for every block parser
 - [ ] **2.7** Gate: corpus agrees with the oracles or every difference is triaged; HTPC TV and receiver identified; fuzz runs clean
