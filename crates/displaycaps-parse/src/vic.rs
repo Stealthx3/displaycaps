@@ -73,7 +73,8 @@ static TABLE: [Row; 154] = [
     (36, 2880, 480, false, 108000, 3432, 525),
     (37, 2880, 576, false, 108000, 3456, 625),
     (38, 2880, 576, false, 108000, 3456, 625),
-    (39, 1920, 1080, true, 72000, 2304, 1251),
+    // VIC 39 is the CTA-861 exception: two 625-line fields, so 1250 lines per frame, not 2v+1.
+    (39, 1920, 1080, true, 72000, 2304, 1250),
     (40, 1920, 1080, true, 148500, 2640, 1125),
     (41, 1280, 720, false, 148500, 1980, 750),
     (42, 720, 576, false, 54000, 864, 625),
@@ -224,6 +225,13 @@ pub fn hdmi_vic(code: u8) -> Option<VicTiming> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vic_39_is_exactly_50_hz() {
+        let t = vic(39).unwrap();
+        assert_eq!((t.width, t.height, t.interlaced, t.v_total), (1920, 1080, true, 1250));
+        assert_eq!(t.refresh_millihz, 50_000);
+    }
 
     #[test]
     fn table_is_complete() {

@@ -116,6 +116,9 @@ pub struct Edid {
     pub cta: Vec<CtaBlock>,
     /// Decoded DisplayID extension blocks (tag 0x70).
     pub displayid: Vec<crate::displayid::DisplayId>,
+    /// CTA-861 data blocks carried inside DisplayID sections (DisplayID data block 0x81),
+    /// decoded like a CTA extension's video content.
+    pub displayid_cta: Vec<crate::cta_video::CtaVideo>,
     /// Tags of extension blocks that are present but not decoded (0xF0 block map, …).
     pub other_extensions: Vec<u8>,
     /// Announced extension blocks missing from the buffer.
@@ -272,11 +275,15 @@ pub fn parse_edid(b: &[u8]) -> Result<Edid, EdidError> {
     let mut cta = Vec::new();
     let mut other_extensions = Vec::new();
     let mut displayid = Vec::new();
+    let mut displayid_cta = Vec::new();
     for i in 1..=n {
         let blk = &b[i * BLOCK..(i + 1) * BLOCK];
         match blk[0] {
             0x02 => cta.push(parse_cta(blk, i as u8)),
-            0x70 => displayid.push(crate::displayid::parse_displayid(blk)),
+            0x70 => {
+                displayid.push(crate::displayid::parse_displayid(blk));
+                displayid_cta.extend(displayid_cta_blocks(blk));
+            }
             t => other_extensions.push(t),
         }
     }
@@ -293,9 +300,40 @@ pub fn parse_edid(b: &[u8]) -> Result<Edid, EdidError> {
         base: crate::timing::parse_base_video(&b[..BLOCK]),
         cta,
         displayid,
+        displayid_cta,
         other_extensions,
         missing_extensions: extension_count.saturating_sub(n as u8),
     })
+}
+
+/// The CTA-861 data block collections inside a DisplayID section's 0x81 blocks, each decoded by
+/// wrapping it in a synthetic CTA extension block (tag 0x02, revision 3, no detailed timings).
+fn displayid_cta_blocks(blk: &[u8]) -> Vec<crate::cta_video::CtaVideo> {
+    let mut out = Vec::new();
+    let Some(&len) = blk.get(2) else {
+        return out;
+    };
+    let end = (5 + usize::from(len))
+        .min(blk.len().saturating_sub(1))
+        .min(BLOCK - 1);
+    let mut i = 5;
+    while i + 3 <= end {
+        let (tag, plen) = (blk[i], usize::from(blk[i + 2]));
+        let payload = i + 3;
+        if tag == 0 && plen == 0 || payload + plen > end {
+            break;
+        }
+        if tag == 0x81 && plen > 0 && 4 + plen < BLOCK {
+            let mut cta = vec![0u8; BLOCK];
+            cta[0] = 0x02;
+            cta[1] = 0x03;
+            cta[2] = (4 + plen) as u8;
+            cta[4..4 + plen].copy_from_slice(&blk[payload..payload + plen]);
+            out.push(crate::cta_video::parse_cta_video(&cta));
+        }
+        i = payload + plen;
+    }
+    out
 }
 
 /// Zeroes the per-unit identifiers in a DisplayID extension block (EDID tag 0x70): the product
