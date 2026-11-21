@@ -1,0 +1,62 @@
+# Usage Plan — DisplayCaps
+_Standard: TOKEN-USAGE-OPTIMIZATION-STANDARD v1 · Created 2026-11-21 · Modelled on AudioCaps' plan_
+
+## Routing (A)
+| Task type | Tier | Why |
+|---|---|---|
+| Data model, schema v1, API shape, crate boundaries (task 1.4) | opus (highest tier in this plan) | every later phase builds on it; expensive to reverse |
+| Link-budget maths design (TMDS/FRL/DP/DSC), path-report algebra, rule engine changes | opus | cross-layer reasoning, silent-loss bugs are subtle |
+| Copying AudioCaps v1.0.0 code, renames, provenance headers | sonnet | mechanical but must stay faithful; tests catch drift |
+| EDID/CTA/DisplayID block parsers | sonnet | spec-driven, oracle- and fuzz-checked; escalate oracle disagreements to opus |
+| Backends (sysfs, KMS, Wayland, Mutter, RandR, VA-API, Vulkan) | sonnet | known APIs; escalate passivity or concurrency bugs to opus |
+| Rule pack entries, quirk data, fixtures | sonnet | mechanical once the engine exists |
+| Docs, changelog, decision-log entries | sonnet | routine writing |
+| Lab build/test runs, oracle runs, fuzz triage | haiku | report failures only |
+| Codebase inventory, dependency/license audit | haiku | conclusion only |
+| Gate review before each phase hand-off | opus | high-stakes, unanchored review |
+
+The main thread runs on whatever model Stealthx3 picks; work tiered below it is delegated to the agents
+below when it is large enough to be worth a brief.
+
+## Agents (B)
+| Agent | Model | Tools | Used for |
+|---|---|---|---|
+| scout | haiku | Read, Grep, Glob | locate code, inventory fixtures, audit deps |
+| runner | haiku | Bash | `scripts/lab.sh run` builds/tests; returns failures only |
+| reviewer | opus | Read, Grep, Glob, Bash | gate review of a phase diff against its gate |
+
+Defined in `.claude/agents/`. Small lookups stay in the main thread.
+
+## Tools (C)
+| Tool | Path | Scope | Replaces |
+|---|---|---|---|
+| progress | scripts/progress.mjs | shared (verbatim) | hand-written progress page |
+| repo-check | scripts/repo-check.mjs | shared (verbatim) | manual repo audits, README progress block, log entries |
+| lab | scripts/lab.sh | shared (verbatim, master v1.2; AudioCaps' local `put` addition not taken) | raw virsh/ssh for builds and tests |
+| phone-alerts | scripts/phone-alerts.mjs | shared (verbatim) | manual notification setup |
+| postmortem | scripts/postmortem.mjs | shared (verbatim) | hand-assembled post-mortem |
+| gate | scripts/gate.sh | project (from AudioCaps) | fmt + clippy + test + deny + fuzz build + SPDX + provenance in one lab call |
+| scan-history | scripts/scan-history.sh | project (from AudioCaps) | checking git history for IPs, MACs, plan docs, captures, unredacted EDIDs |
+| lab-sync-back | scripts/lab-sync-back.sh | project (from AudioCaps) | copying generated files (lockfile, schema, fmt output, goldens) back from the guest |
+| oracles | scripts/oracles.sh | project | building and running edid-decode / di-edid-decode in the lab |
+| parity | scripts/parity-audiocaps.sh | project | regenerating AudioCaps' sink keys for the shared EDID vectors |
+Candidates to watch: capture diffing, fixture redaction check, oracle-diff summariser (phase 2).
+
+## Pacing (D)
+| Session | Covers | Size | Checkpoint |
+|---|---|---|---|
+| P1-S1 | Git, standards, lab VM, workspace, copied code, model + schema, capture, oracles | L | phase 1 gate summary |
+| P2 | EDID video parser (split by block family if long) | L ×2 | 2.3 and 2.7 |
+| P3–P9 | One or two sessions per phase | M | each gate |
+Never two L sessions back to back where limits are tight; Phase 2 is the largest step.
+
+## Context (E)
+- Never read by default: `target/`, `Cargo.lock`, `schema/*.json` (generated), `tests/fixtures/**`, `docs/progress/`, `docs/plan/*.pdf` (diagrams only), the AudioCaps repo outside its `v1.0.0` export in the scratchpad
+- On-demand docs: `docs/plan/*`, `docs/standards/*`, `docs/architecture.md`, `docs/LAB.md`
+- CLAUDE.md line budget: ~130 (project rules are dense; standards are referenced, not inlined)
+
+## Log
+- 2026-11-21 — Plan created from AudioCaps' plan. Task 1.4 (data model and schema v1) runs in the main thread on the top tier.
+
+## Handoff
+_Updated at each checkpoint._

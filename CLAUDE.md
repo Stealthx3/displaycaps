@@ -86,15 +86,21 @@ written; raise any change at a gate.
   reuse the existing base volumes; keep one guest running at a time unless the
   host has room. Real-hardware tests on the host or the HTPC need a one-time
   exception from Stealthx3 per test.
-- **Standards:** copy the shared ai-assets standards into `docs/standards/`
-  from the masters in `/path/to/Business/Development/ai-assets` (phase 1.1):
-  REPO-STRUCTURE-STANDARD, PROGRESS-BAR-STANDARD, PHONE-ALERTS-STANDARD,
-  VM-LAB-STANDARD, TOKEN-USAGE-OPTIMIZATION-STANDARD, POST-MORTEM-STANDARD.
-  Shared scripts are copied verbatim and not edited per project. If a standard
-  conflicts with this file, ask.
+- **Standards:** copies of the shared ai-assets standards live in
+  `docs/standards/` and apply to this project: REPO-STRUCTURE-STANDARD.md,
+  PROGRESS-BAR-STANDARD.md, PHONE-ALERTS-STANDARD.md, VM-LAB-STANDARD.md,
+  TOKEN-USAGE-OPTIMIZATION-STANDARD.md, POST-MORTEM-STANDARD.md (masters in
+  `/path/to/Business/Development/ai-assets`). Shared scripts are copied
+  verbatim and not edited per project. If a standard conflicts with this file,
+  ask.
+- Build/test only via `scripts/lab.sh` (see `docs/LAB.md`). Guests are
+  watchable in virt-manager. `scripts/gate.sh` runs the quality bar in the lab.
+- Phone alerts: see PHONE-ALERTS-STANDARD; hooks installed, check with
+  `node scripts/phone-alerts.mjs check`.
 - Progress: tick `docs/PLAN.md` in the same commit as the work, then run
   `node scripts/progress.mjs` and `node scripts/repo-check.mjs progress`.
-- Append one line per session to `docs/postmortem/JOURNAL.md`.
+- Usage plan: `docs/USAGE-PLAN.md` (read the handoff note first). Append one
+  line per session to `docs/postmortem/JOURNAL.md`.
 
 ## Repository conventions
 
