@@ -1,0 +1,64 @@
+{
+  "generator": "scripts/parity-audiocaps.sh",
+  "audiocaps": {
+    "version": "1.0.0",
+    "commit": "049d053f4f590667a1706fa001c2e75611bb9ff5"
+  },
+  "note": "Sink identity as AudioCaps v1.0.0 reports it for each vector in edid/ (ELD model-name fallback applies when the EDID has none).",
+  "vectors": {
+    "hisense-55qd5n": {
+      "sink_key": "HEC-a030",
+      "manufacturer_id": "HEC",
+      "product_code": 41008,
+      "model_name": "HISENSE"
+    },
+    "lg-fhd": {
+      "sink_key": "GSM-5be5",
+      "manufacturer_id": "GSM",
+      "product_code": 23525,
+      "model_name": "LG FHD"
+    },
+    "qemu-virtual": {
+      "sink_key": "RHT-1234",
+      "manufacturer_id": "RHT",
+      "product_code": 4660,
+      "model_name": "QEMU Monitor"
+    },
+    "samsung-lc34g55t": {
+      "sink_key": "SAM-711a",
+      "manufacturer_id": "SAM",
+      "product_code": 28954,
+      "model_name": "LC34G55T"
+    },
+    "synthetic-invalid-pnp": {
+      "sink_key": "0000-a030",
+      "manufacturer_id": null,
+      "product_code": 41008,
+      "model_name": "HISENSE"
+    },
+    "synthetic-no-name": {
+      "sink_key": "HEC-a030",
+      "manufacturer_id": "HEC",
+      "product_code": 41008,
+      "model_name": "HISENSE"
+    },
+    "synthetic-serial-both": {
+      "sink_key": "HEC-a030-60ff2bb9bb89b6fd",
+      "manufacturer_id": "HEC",
+      "product_code": 41008,
+      "model_name": "HISENSE"
+    },
+    "synthetic-serial-number": {
+      "sink_key": "HEC-a030-ef797c8118f02dfb",
+      "manufacturer_id": "HEC",
+      "product_code": 41008,
+      "model_name": "HISENSE"
+    },
+    "synthetic-serial-string": {
+      "sink_key": "HEC-a030-624e44f945ca0572",
+      "manufacturer_id": "HEC",
+      "product_code": 41008,
+      "model_name": "HISENSE"
+    }
+  }
+}

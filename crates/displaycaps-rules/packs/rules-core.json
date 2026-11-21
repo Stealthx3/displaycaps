@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "pack": "displaycaps-rules-core",
+  "rules": [
+    {
+      "code": "SANDBOX_PERMISSION_MISSING",
+      "severity": "warning",
+      "hop": "environment",
+      "scope": "system",
+      "description": "The app runs in a Flatpak or Snap that lacks a permission needed to read a layer.",
+      "when": { "nonempty": "g.sandbox.required_missing" },
+      "evidence": ["g.sandbox.kind", "g.sandbox.required_missing"],
+      "hint": {
+        "generic": "The sandbox lacks {g.sandbox.required_missing}. Fix: {g.sandbox.required_fixes}"
+      }
+    }
+  ]
+}

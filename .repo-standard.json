@@ -1,0 +1,8 @@
+{
+  "defaultBranch": "main",
+  "fork": false,
+  "timezone": "America/Los_Angeles",
+  "ignore": [
+    "tests/fixtures/"
+  ]
+}

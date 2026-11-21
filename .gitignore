@@ -64,3 +64,6 @@ CLAUDE.local.md
 .env.*
 *.local
 .claude/phone-alerts.local.json
+
+# PII-REDACTION-STANDARD: real lab host details
+docs/LAB.local.md

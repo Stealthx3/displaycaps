@@ -22,7 +22,7 @@ planned. Linux 1.0 first; Windows and macOS later on the same OS-neutral core.
   Rust crate. Consumers bundle the shared library and follow project docs.
 - **License:** LGPL-2.1-or-later. Every source file carries
   `SPDX-License-Identifier: LGPL-2.1-or-later`. Dual MIT/Apache-2.0 crates are
-  taken under MIT. Apache-2.0-only, GPL-only or unknown licenses need Stealthx3's
+  taken under MIT. Apache-2.0-only, GPL-only or unknown licenses need the maintainer's
   approval.
 - **Sandboxes:** must work fully in-process inside Flatpak and Snap. No host
   service or daemon. A layer that can't be read is `unknown` with a reason,
@@ -32,7 +32,7 @@ planned. Linux 1.0 first; Windows and macOS later on the same OS-neutral core.
   ABI pattern) into this repo and maintain it here. No shared crate, no git
   dependency on AudioCaps. Each copied file names its AudioCaps source path and
   commit in a header comment. **Never modify the AudioCaps repo**
-  (`/path/to/Personal/Projects/Git/audiocaps`); read it at tag `v1.0.0`.
+  (the sibling checkout `../audiocaps`); read it at tag `v1.0.0`.
 - **EDID parsing:** copy AudioCaps' Rust EDID parser and extend it with every
   video block. Do not link or fork libdisplay-info. edid-decode and
   libdisplay-info's `di-edid-decode` run only in the lab as test oracles.
@@ -71,13 +71,13 @@ written; raise any change at a gate.
 - **Phases and gates.** Work follows the roadmap in `docs/PLAN.md` (9 phases to
   Linux 1.0). Finish a phase on its own branch, meet its gate, then **stop**:
   summarize what was built and how the gate was verified, and wait for
-  Stealthx3's approval before starting the next phase. This holds for every
+  the maintainer's approval before starting the next phase. This holds for every
   phase.
 - **Ask before:** reopening a settled decision, adding a dependency with a new
   license family, installing system packages on the host, touching the host's
   display or compositor configuration, creating or publishing anything outside
   this repo (GitHub repo, Pages, releases), or anything irreversible.
-- **Notify:** when a gate is reached or a decision needs Stealthx3, send a phone
+- **Notify:** when a gate is reached or a decision needs the maintainer, send a phone
   push notification per PHONE-ALERTS-STANDARD; otherwise say so prominently at
   the end of the response.
 - **Dev and test environment:** build and test only inside libvirt/KVM VMs or
@@ -85,23 +85,34 @@ written; raise any change at a gate.
   `scripts/lab.sh` (see `docs/LAB.md`). Guests are named `lab-displaycaps-*`;
   reuse the existing base volumes; keep one guest running at a time unless the
   host has room. Real-hardware tests on the host or the HTPC need a one-time
-  exception from Stealthx3 per test.
-- **Standards:** copy the shared ai-assets standards into `docs/standards/`
-  from the masters in `/path/to/Business/Development/ai-assets` (phase 1.1):
-  REPO-STRUCTURE-STANDARD, PROGRESS-BAR-STANDARD, PHONE-ALERTS-STANDARD,
-  VM-LAB-STANDARD, TOKEN-USAGE-OPTIMIZATION-STANDARD, POST-MORTEM-STANDARD.
-  Shared scripts are copied verbatim and not edited per project. If a standard
-  conflicts with this file, ask.
+  exception from the maintainer per test.
+- **Standards:** copies of the shared ai-assets standards live in
+  `docs/standards/` and apply to this project: REPO-STRUCTURE-STANDARD.md,
+  PROGRESS-BAR-STANDARD.md, PHONE-ALERTS-STANDARD.md, VM-LAB-STANDARD.md,
+  TOKEN-USAGE-OPTIMIZATION-STANDARD.md, POST-MORTEM-STANDARD.md,
+  PII-REDACTION-STANDARD.md (masters in the
+  shared ai-assets folder; its path is in `docs/plan/local-environment.md`). Shared scripts are copied
+  verbatim and not edited per project. If a standard conflicts with this file,
+  ask.
+- Build/test only via `scripts/lab.sh` (see `docs/LAB.md`). Guests are
+  watchable in virt-manager. `scripts/gate.sh` runs the quality bar in the lab.
+- Phone alerts: see PHONE-ALERTS-STANDARD; hooks installed, check with
+  `node scripts/phone-alerts.mjs check`.
 - Progress: tick `docs/PLAN.md` in the same commit as the work, then run
-  `node scripts/progress.mjs` and `node scripts/repo-check.mjs progress`.
-- Append one line per session to `docs/postmortem/JOURNAL.md`.
+  `node scripts/progress.mjs` and `node scripts/repo-check.mjs progress`. The
+  page is published by GitHub Pages: https://stealthx3.github.io/displaycaps/
+- PII: see PII-REDACTION-STANDARD; hooks block commits with personal values.
+  Scan with `node scripts/pii-scan.mjs scan` before every push or publish.
+- Usage plan: `docs/USAGE-PLAN.md` (read the handoff note first). Append one
+  line per session to `docs/postmortem/JOURNAL.md`.
 
 ## Repository conventions
 
 - Branches: `main` is always releasable; work on `<type>/<kebab-case>` branches
   (phase work: `feat/phase-N-<topic>`; also `fix/`, `docs/`, `chore/`).
   Conventional Commit messages (`feat:`, `fix:`, `docs:`, `test:`, `chore:`,
-  `refactor:`). Keep the git author identity already configured on this machine.
+  `refactor:`). Commit as the public identity in `.pii-redaction.json` (set in
+  this repo's git config); never with a personal name or email.
 - Every user decision or action goes in `docs/DECISIONS.md` (oldest first).
   User-facing changes update `docs/CHANGELOG.md` under Unreleased.
 - Auxiliary docs live in `docs/`. The README follows REPO-STRUCTURE-STANDARD §5.
@@ -121,5 +132,5 @@ written; raise any change at a gate.
 | `docs/plan/claude-code-kickoff.md` | The kickoff prompt that started development (git-ignored) |
 | `docs/DECISIONS.md` | Decision & action log |
 | `docs/PLAN.md` | Roadmap checkboxes and open items (drives the progress page) |
-| `/path/to/Personal/Projects/Git/audiocaps` | AudioCaps, the source of the copied code (read-only) |
+| `../audiocaps` | AudioCaps, the source of the copied code (read-only) |
 | `README.md` | Public-facing summary |

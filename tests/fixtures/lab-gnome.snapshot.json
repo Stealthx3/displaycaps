@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0.0",
+  "generation": 0,
+  "taken_at_ms": 1795262765032,
+  "source": {
+    "kind": "fixture",
+    "name": "lab-gnome"
+  },
+  "scope": {
+    "endpoint_classes": {
+      "select": "all"
+    },
+    "endpoints": {
+      "select": "all"
+    },
+    "layers": {
+      "select": "all"
+    },
+    "fields": {
+      "select": "all"
+    },
+    "presentation_paths": {
+      "select": "all"
+    }
+  },
+  "redaction": {
+    "serials": "hash",
+    "device_names": "mask"
+  },
+  "layers": [
+    {
+      "layer": "sink_chain",
+      "availability": {
+        "state": "unknown",
+        "reason": "not_implemented",
+        "detail": "no backend for this layer yet"
+      }
+    },
+    {
+      "layer": "host_hardware",
+      "availability": {
+        "state": "unknown",
+        "reason": "not_implemented",
+        "detail": "no backend for this layer yet"
+      }
+    },
+    {
+      "layer": "kernel_driver",
+      "availability": {
+        "state": "unknown",
+        "reason": "not_implemented",
+        "detail": "no backend for this layer yet"
+      }
+    },
+    {
+      "layer": "kms",
+      "availability": {
+        "state": "unknown",
+        "reason": "not_implemented",
+        "detail": "no backend for this layer yet"
+      }
+    },
+    {
+      "layer": "link",
+      "availability": {
+        "state": "unknown",
+        "reason": "not_implemented",
+        "detail": "no backend for this layer yet"
+      }
+    },
+    {
+      "layer": "compositor",
+      "availability": {
+        "state": "unknown",
+        "reason": "not_implemented",
+        "detail": "no backend for this layer yet"
+      }
+    },
+    {
+      "layer": "decode",
+      "availability": {
+        "state": "unknown",
+        "reason": "not_implemented",
+        "detail": "no backend for this layer yet"
+      }
+    },
+    {
+      "layer": "environment",
+      "availability": {
+        "state": "partial"
+      }
+    }
+  ],
+  "environment": {
+    "os": {
+      "state": "known",
+      "value": {
+        "id": "debian",
+        "version_id": "13",
+        "family": "debian"
+      },
+      "confidence": "measured",
+      "provenance": {
+        "layer": "environment",
+        "source": {
+          "kind": "file",
+          "path": "/etc/os-release"
+        },
+        "read_at_ms": 1795262765032
+      }
+    },
+    "kernel": {
+      "state": "known",
+      "value": "6.12.117+deb13-amd64",
+      "confidence": "measured",
+      "provenance": {
+        "layer": "environment",
+        "source": {
+          "kind": "file",
+          "path": "/proc/sys/kernel/osrelease"
+        },
+        "read_at_ms": 1795262765032
+      }
+    },
+    "sandbox": {
+      "state": "known",
+      "value": {
+        "kind": "none"
+      },
+      "confidence": "measured",
+      "provenance": {
+        "layer": "environment",
+        "source": {
+          "kind": "file",
+          "path": "/.flatpak-info"
+        },
+        "read_at_ms": 1795262765032
+      }
+    },
+    "session": {
+      "state": "unknown",
+      "reason": "not_exposed",
+      "detail": "environment variables are not captured"
+    }
+  },
+  "endpoints": []
+}

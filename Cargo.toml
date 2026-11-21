@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Adapted from AudioCaps v1.0.0 Cargo.toml (commit 049d053).
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "LGPL-2.1-or-later"
+repository = "https://github.com/Stealthx3/displaycaps"
+publish = false
+
+[workspace.dependencies]
+displaycaps-model = { path = "crates/displaycaps-model" }
+displaycaps-parse = { path = "crates/displaycaps-parse" }
+displaycaps-link = { path = "crates/displaycaps-link" }
+displaycaps-backends = { path = "crates/displaycaps-backends" }
+displaycaps-rules = { path = "crates/displaycaps-rules" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+schemars = "1"
+sha2 = "0.10"
+regex = "1"
+tar = "0.4"
+flate2 = "1"
+expect-test = "1"
+nix = { version = "0.31", default-features = false, features = ["poll"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

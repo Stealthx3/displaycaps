@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Adapted from AudioCaps v1.0.0 (commit 049d053) crates/audiocaps-ffi/Cargo.toml; the static
+# library is added and the rules dependency dropped (no can-play query).
+[package]
+name = "displaycaps-ffi"
+description = "DisplayCaps C ABI; the shared library apps bundle"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "displaycaps"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+displaycaps-model.workspace = true
+displaycaps-backends.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+nix = { workspace = true, features = ["fs"] }
+
+[lints]
+workspace = true

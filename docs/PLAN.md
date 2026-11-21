@@ -1,27 +1,28 @@
 # DisplayCaps — Roadmap to Linux 1.0
 
 Public task list for the nine gated phases. The full design lives in the development plan (kept
-outside git); this file only tracks progress. Each phase ends at a gate that Stealthx3 reviews before the
+outside git); this file only tracks progress. Each phase ends at a gate that the maintainer reviews before the
 next phase starts. Ticks land in the same commit as the work.
 
 Open items (not phase tasks):
 
+- The HTPC is out of scope (lab-simulated tests only). Gates that name it (2.7 TV and receiver, 4.3 HTPC 4K fallbacks) need a simulated equivalent, agreed at those gates.
+
 - Plan the combined library: name, repo, API shape, and what it adds beyond the two.
 - Decide whether DisplayCaps' video EDID additions are back-ported to AudioCaps in a later release.
 - Find an HDMI 2.1 FRL test sink, or accept fixture-only FRL coverage.
-- Record the workstation's monitor models.
 - Final library name, after a collision check, before 1.0.
 
 ## Phase 1 — Scaffold and copied foundation (about 2 weeks)
 
-- [ ] **1.1** Adopt the shared standards: repo layout, progress page, phone alerts, VM lab, usage plan, journal
-- [ ] **1.2** Cargo workspace with seven crates (model, parse, link, backends, rules, ffi, cli), pinned toolchain, rustfmt/clippy, SPDX headers, `deny.toml`
-- [ ] **1.3** Copy AudioCaps v1.0.0's generic code with provenance headers, renamed for DisplayCaps, with its tests
-- [ ] **1.4** Data model: display endpoints, presentation paths, layers, link state, path reports, findings; JSON schema v1
-- [ ] **1.5** Capture tool `displaycaps capture`: passive, read-only, EDID serials zeroed
-- [ ] **1.6** Captures: lab VMs (virtio-gpu with KWin, GNOME and Sway), workstation, HTPC
-- [ ] **1.7** EDID corpus and the lab oracle harness (edid-decode, di-edid-decode)
-- [ ] **1.8** Gate: copied code passes its tests; sink-key parity with AudioCaps; fmt, clippy, tests and cargo-deny clean; history clean
+- [x] **1.1** Adopt the shared standards: repo layout, progress page, phone alerts, VM lab, usage plan, journal
+- [x] **1.2** Cargo workspace with seven crates (model, parse, link, backends, rules, ffi, cli), pinned toolchain, rustfmt/clippy, SPDX headers, `deny.toml`
+- [x] **1.3** Copy AudioCaps v1.0.0's generic code with provenance headers, renamed for DisplayCaps, with its tests
+- [x] **1.4** Data model: display endpoints, presentation paths, layers, link state, path reports, findings; JSON schema v1
+- [x] **1.5** Capture tool `displaycaps capture`: passive, read-only, EDID serials zeroed
+- [x] **1.6** Captures: lab VMs (virtio-gpu with KWin, GNOME and Sway), workstation (HTPC skipped: lab-simulated tests only)
+- [x] **1.7** EDID corpus and the lab oracle harness (edid-decode, di-edid-decode)
+- [x] **1.8** Gate: copied code passes its tests; sink-key parity with AudioCaps; fmt, clippy, tests and cargo-deny clean; history clean
 
 ## Phase 2 — EDID video parser and sink (about 4 weeks)
 

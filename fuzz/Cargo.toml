@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Adapted from AudioCaps v1.0.0 (commit 049d053) fuzz/Cargo.toml.
+# Fuzz harness (cargo-fuzz / libFuzzer). A separate workspace: never shipped, never linked into
+# the library. libfuzzer-sys is (MIT OR Apache-2.0) AND NCSA; NCSA is allowed here only
+# (AudioCaps decision 2026-11-09, carried over; see fuzz/deny.toml).
+[package]
+name = "displaycaps-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "LGPL-2.1-or-later"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+displaycaps-parse = { path = "../crates/displaycaps-parse" }
+displaycaps-rules = { path = "../crates/displaycaps-rules" }
+serde_json = "1"
+
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "edid"
+path = "fuzz_targets/edid.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "os_release"
+path = "fuzz_targets/os_release.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rule_pack"
+path = "fuzz_targets/rule_pack.rs"
+test = false
+doc = false
+bench = false
