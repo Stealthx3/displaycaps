@@ -725,6 +725,17 @@
         "session": {
           "description": "The display session the app runs in.",
           "$ref": "#/$defs/Value4"
+        },
+        "graphics_driver": {
+          "description": "Where the GL, Vulkan and VA-API drivers this process would load come from (host or a\nsandbox runtime). Filled by the decode layer (opt-in); omitted when not read.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Value5"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1482,6 +1493,104 @@
         }
       ]
     },
+    "Value5": {
+      "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
+      "oneOf": [
+        {
+          "description": "The value was read or derived.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "known"
+            },
+            "value": {
+              "description": "The value itself.",
+              "$ref": "#/$defs/GraphicsDriverSource"
+            },
+            "confidence": {
+              "description": "Measured (read directly) or inferred (derived from tables or quirk data).",
+              "$ref": "#/$defs/Confidence"
+            },
+            "provenance": {
+              "description": "Where and when the value was read.",
+              "$ref": "#/$defs/Provenance"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "confidence",
+            "provenance"
+          ]
+        },
+        {
+          "description": "The value could not be determined.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "description": "Why the value is unknown.",
+              "$ref": "#/$defs/UnknownReason"
+            },
+            "detail": {
+              "description": "Human-readable detail, e.g. the missing permission or the error text.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "GraphicsDriverSource": {
+      "description": "Where the process's graphics and decode drivers come from.",
+      "type": "object",
+      "properties": {
+        "origin": {
+          "description": "Origin of the drivers.",
+          "$ref": "#/$defs/DriverOrigin"
+        },
+        "detail": {
+          "description": "Detail, e.g. the Flatpak GL extension name or the content snap.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "origin"
+      ]
+    },
+    "DriverOrigin": {
+      "description": "Driver origins.",
+      "oneOf": [
+        {
+          "description": "The host system's drivers (not sandboxed).",
+          "type": "string",
+          "const": "host"
+        },
+        {
+          "description": "A Flatpak runtime GL extension (e.g. `org.freedesktop.Platform.GL.default`).",
+          "type": "string",
+          "const": "flatpak_extension"
+        },
+        {
+          "description": "A Snap content provider (e.g. `gpu-2404`).",
+          "type": "string",
+          "const": "snap_content"
+        }
+      ]
+    },
     "Endpoint": {
       "description": "One display endpoint with everything reported about it (within the probe scope).",
       "type": "object",
@@ -1496,11 +1605,11 @@
         },
         "connector": {
           "description": "Connector type.",
-          "$ref": "#/$defs/Value5"
+          "$ref": "#/$defs/Value6"
         },
         "status": {
           "description": "Connection status (from the kernel's cached state; never a forced probe).",
-          "$ref": "#/$defs/Value6"
+          "$ref": "#/$defs/Value7"
         },
         "name": {
           "description": "Display name, e.g. the compositor's output description. Product names are not personal.",
@@ -1560,7 +1669,7 @@
         "status"
       ]
     },
-    "Value5": {
+    "Value6": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -1686,7 +1795,7 @@
         }
       ]
     },
-    "Value6": {
+    "Value7": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -2007,7 +2116,7 @@
         },
         "edid": {
           "description": "EDID facts that aren't capabilities: version, extensions, checksum state.",
-          "$ref": "#/$defs/Value8"
+          "$ref": "#/$defs/Value9"
         },
         "video": {
           "description": "Video capabilities the sink advertises (EDID, CTA-861 and DisplayID blocks).",
@@ -2015,11 +2124,11 @@
         },
         "link": {
           "description": "Link limits the sink states (HDMI and HDMI Forum VSDBs, DisplayID).",
-          "$ref": "#/$defs/Value15"
+          "$ref": "#/$defs/Value16"
         },
         "chain": {
           "description": "Devices in between (receiver, splitter, adapter, dock), when known.",
-          "$ref": "#/$defs/Value17"
+          "$ref": "#/$defs/Value18"
         },
         "quirks": {
           "description": "Quirk-data entries that matched this sink, with their effects.",
@@ -2051,7 +2160,7 @@
         },
         "product_code": {
           "description": "Product code.",
-          "$ref": "#/$defs/Value7"
+          "$ref": "#/$defs/Value8"
         },
         "model_name": {
           "description": "Monitor name, e.g. `HISENSE`.",
@@ -2081,7 +2190,7 @@
         "sink_key"
       ]
     },
-    "Value7": {
+    "Value8": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -2142,7 +2251,7 @@
         }
       ]
     },
-    "Value8": {
+    "Value9": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -2238,12 +2347,79 @@
             "string",
             "null"
           ]
+        },
+        "range_limits": {
+          "description": "The Display Range Limits descriptor (tag 0xFD), when present. Its absence is itself a\nsignal (SINK_DATA_SUSPECT), so `None` means \"not in the EDID\".",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RangeLimits"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "version",
         "length",
         "checksums_valid"
+      ]
+    },
+    "RangeLimits": {
+      "description": "The EDID Display Range Limits descriptor. Rates are whole numbers in the descriptor.",
+      "type": "object",
+      "properties": {
+        "min_vertical_hz": {
+          "description": "Lowest vertical rate, in Hz.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "max_vertical_hz": {
+          "description": "Highest vertical rate, in Hz.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "min_horizontal_khz": {
+          "description": "Lowest horizontal rate, in kHz.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "max_horizontal_khz": {
+          "description": "Highest horizontal rate, in kHz.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "max_pixel_clock_khz": {
+          "description": "Highest pixel clock, in kHz, when stated.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "formula": {
+          "description": "Timing formula the descriptor names (`default_gtf`, `range_only`, `secondary_gtf`, `cvt`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "min_vertical_hz",
+        "max_vertical_hz",
+        "min_horizontal_khz",
+        "max_horizontal_khz"
       ]
     },
     "CapabilitySet": {
@@ -2254,7 +2430,7 @@
           "description": "Modes (field group `modes`).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value9"
+              "$ref": "#/$defs/Value10"
             },
             {
               "type": "null"
@@ -2265,7 +2441,7 @@
           "description": "Variable refresh range (field group `vrr`).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value10"
+              "$ref": "#/$defs/Value11"
             },
             {
               "type": "null"
@@ -2276,7 +2452,7 @@
           "description": "Colour formats with their bit depths (field group `color_formats`).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value11"
+              "$ref": "#/$defs/Value12"
             },
             {
               "type": "null"
@@ -2287,7 +2463,7 @@
           "description": "HDR capabilities (field group `hdr`).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value12"
+              "$ref": "#/$defs/Value13"
             },
             {
               "type": "null"
@@ -2298,7 +2474,7 @@
           "description": "Colorimetry (field group `colorimetry`).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value13"
+              "$ref": "#/$defs/Value14"
             },
             {
               "type": "null"
@@ -2309,7 +2485,7 @@
           "description": "Quantization range (field group `quantization`).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value14"
+              "$ref": "#/$defs/Value15"
             },
             {
               "type": "null"
@@ -2320,7 +2496,7 @@
           "description": "Link limits (field group `link`).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value15"
+              "$ref": "#/$defs/Value16"
             },
             {
               "type": "null"
@@ -2331,7 +2507,7 @@
           "description": "Hardware decode profiles (field group `decode`, opt-in).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value16"
+              "$ref": "#/$defs/Value17"
             },
             {
               "type": "null"
@@ -2340,7 +2516,7 @@
         }
       }
     },
-    "Value9": {
+    "Value10": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -2419,7 +2595,7 @@
           "minimum": 0,
           "maximum": 65535
         },
-        "refresh_mhz": {
+        "refresh_millihz": {
           "description": "Vertical refresh in millihertz (field rate for interlaced modes).",
           "type": "integer",
           "format": "uint32",
@@ -2479,7 +2655,7 @@
       "required": [
         "width",
         "height",
-        "refresh_mhz"
+        "refresh_millihz"
       ]
     },
     "Timing": {
@@ -2597,7 +2773,7 @@
         }
       ]
     },
-    "Value10": {
+    "Value11": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -2659,13 +2835,13 @@
       "description": "Variable refresh range.",
       "type": "object",
       "properties": {
-        "min_mhz": {
+        "min_millihz": {
           "description": "Lowest refresh in millihertz.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0
         },
-        "max_mhz": {
+        "max_millihz": {
           "description": "Highest refresh in millihertz.",
           "type": "integer",
           "format": "uint32",
@@ -2677,8 +2853,8 @@
         }
       },
       "required": [
-        "min_mhz",
-        "max_mhz",
+        "min_millihz",
+        "max_millihz",
         "kind"
       ]
     },
@@ -2702,7 +2878,7 @@
         }
       ]
     },
-    "Value11": {
+    "Value12": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -2812,7 +2988,7 @@
         }
       ]
     },
-    "Value12": {
+    "Value13": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -3071,7 +3247,7 @@
         }
       ]
     },
-    "Value13": {
+    "Value14": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -3197,7 +3373,7 @@
         }
       ]
     },
-    "Value14": {
+    "Value15": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -3273,7 +3449,7 @@
         "ycc_selectable"
       ]
     },
-    "Value15": {
+    "Value16": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -3532,7 +3708,7 @@
         }
       }
     },
-    "Value16": {
+    "Value17": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -3711,7 +3887,7 @@
         }
       ]
     },
-    "Value17": {
+    "Value18": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -3941,7 +4117,7 @@
               "minimum": 0,
               "maximum": 65535
             },
-            "refresh_mhz": {
+            "refresh_millihz": {
               "description": "Refresh in millihertz.",
               "type": "integer",
               "format": "uint32",
@@ -3952,7 +4128,7 @@
             "effect",
             "width",
             "height",
-            "refresh_mhz"
+            "refresh_millihz"
           ]
         },
         {
@@ -4138,7 +4314,7 @@
         }
       ]
     },
-    "Value18": {
+    "Value19": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -4256,7 +4432,7 @@
       "properties": {
         "gpu": {
           "description": "The GPU this connector belongs to.",
-          "$ref": "#/$defs/Value18"
+          "$ref": "#/$defs/Value19"
         },
         "connector_index": {
           "description": "Connector index on the card for its type, e.g. `1` for `HDMI-A-1`.",
@@ -4272,7 +4448,7 @@
         "gpu"
       ]
     },
-    "Value19": {
+    "Value20": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -4361,7 +4537,7 @@
         },
         "enabled": {
           "description": "Whether it is enabled.",
-          "$ref": "#/$defs/Value20"
+          "$ref": "#/$defs/Value21"
         }
       },
       "required": [
@@ -4369,7 +4545,7 @@
         "enabled"
       ]
     },
-    "Value20": {
+    "Value21": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -4437,7 +4613,7 @@
         },
         "parameters": {
           "description": "Module parameters that matter for display (e.g. `dcfeaturemask`), as read.",
-          "$ref": "#/$defs/Value19"
+          "$ref": "#/$defs/Value20"
         },
         "features": {
           "description": "Feature gates worked out from the parameters and kernel version (e.g. HDMI FRL).",
@@ -4452,7 +4628,7 @@
         "parameters"
       ]
     },
-    "Value21": {
+    "Value22": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -4516,7 +4692,7 @@
         }
       ]
     },
-    "Value22": {
+    "Value23": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -4577,7 +4753,7 @@
         }
       ]
     },
-    "Value23": {
+    "Value24": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -4635,7 +4811,7 @@
         }
       ]
     },
-    "Value24": {
+    "Value25": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -4754,13 +4930,13 @@
       "properties": {
         "active_mode": {
           "description": "The active mode, when the connector drives a CRTC.",
-          "$ref": "#/$defs/Value21"
+          "$ref": "#/$defs/Value22"
         },
         "max_bpc": {
           "description": "`max bpc`: the current value.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value22"
+              "$ref": "#/$defs/Value23"
             },
             {
               "type": "null"
@@ -4782,7 +4958,7 @@
           "description": "`color format` property (Linux 7.3+), when the driver has it.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value23"
+              "$ref": "#/$defs/Value24"
             },
             {
               "type": "null"
@@ -4793,7 +4969,7 @@
           "description": "`HDR_OUTPUT_METADATA` blob, decoded; `None` inside the value when unset (SDR).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value24"
+              "$ref": "#/$defs/Value25"
             },
             {
               "type": "null"
@@ -4815,7 +4991,7 @@
           "description": "`vrr_capable` on the connector.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value20"
+              "$ref": "#/$defs/Value21"
             },
             {
               "type": "null"
@@ -4826,7 +5002,7 @@
           "description": "`VRR_ENABLED` on the CRTC.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value20"
+              "$ref": "#/$defs/Value21"
             },
             {
               "type": "null"
@@ -4871,7 +5047,7 @@
         "active_mode"
       ]
     },
-    "Value25": {
+    "Value26": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -5003,7 +5179,7 @@
         }
       ]
     },
-    "Value26": {
+    "Value27": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -5076,7 +5252,7 @@
         }
       ]
     },
-    "Value27": {
+    "Value28": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -5142,21 +5318,21 @@
       "properties": {
         "signal": {
           "description": "TMDS, FRL or DisplayPort, and its rate.",
-          "$ref": "#/$defs/Value25"
+          "$ref": "#/$defs/Value26"
         },
         "color_format": {
           "description": "Colour format on the wire.",
-          "$ref": "#/$defs/Value23"
+          "$ref": "#/$defs/Value24"
         },
         "bit_depth": {
           "description": "Bits per component on the wire.",
-          "$ref": "#/$defs/Value22"
+          "$ref": "#/$defs/Value23"
         },
         "range": {
           "description": "Quantization range on the wire.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value26"
+              "$ref": "#/$defs/Value27"
             },
             {
               "type": "null"
@@ -5167,7 +5343,7 @@
           "description": "Whether DSC is in use.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value20"
+              "$ref": "#/$defs/Value21"
             },
             {
               "type": "null"
@@ -5176,11 +5352,11 @@
         },
         "required_kbps": {
           "description": "Data rate the signal needs, in kbit/s.",
-          "$ref": "#/$defs/Value27"
+          "$ref": "#/$defs/Value28"
         },
         "capacity_kbps": {
           "description": "Data rate the link can carry, in kbit/s.",
-          "$ref": "#/$defs/Value27"
+          "$ref": "#/$defs/Value28"
         },
         "limited_by": {
           "description": "Devices between the GPU and the sink that limit the link (adapter, dock, MST).",
@@ -5198,7 +5374,7 @@
         "capacity_kbps"
       ]
     },
-    "Value28": {
+    "Value29": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -5256,7 +5432,7 @@
         }
       ]
     },
-    "Value29": {
+    "Value30": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -5315,7 +5491,7 @@
         }
       ]
     },
-    "Value30": {
+    "Value31": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -5430,7 +5606,7 @@
         "transfer"
       ]
     },
-    "Value31": {
+    "Value32": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -5522,13 +5698,13 @@
         },
         "enabled": {
           "description": "The output is enabled.",
-          "$ref": "#/$defs/Value20"
+          "$ref": "#/$defs/Value21"
         },
         "mode": {
           "description": "The current mode as the compositor reports it.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value28"
+              "$ref": "#/$defs/Value29"
             },
             {
               "type": "null"
@@ -5539,7 +5715,7 @@
           "description": "Scale factor.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value29"
+              "$ref": "#/$defs/Value30"
             },
             {
               "type": "null"
@@ -5550,7 +5726,7 @@
           "description": "HDR mode switched on.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value20"
+              "$ref": "#/$defs/Value21"
             },
             {
               "type": "null"
@@ -5561,7 +5737,7 @@
           "description": "Wide colour gamut (BT.2020 signalling) switched on.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value20"
+              "$ref": "#/$defs/Value21"
             },
             {
               "type": "null"
@@ -5572,7 +5748,7 @@
           "description": "SDR content brightness in nits, when HDR is on.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value29"
+              "$ref": "#/$defs/Value30"
             },
             {
               "type": "null"
@@ -5583,7 +5759,7 @@
           "description": "The output's image description (color-management-v1, or the compositor's own API).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value30"
+              "$ref": "#/$defs/Value31"
             },
             {
               "type": "null"
@@ -5594,7 +5770,7 @@
           "description": "VRR policy.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value31"
+              "$ref": "#/$defs/Value32"
             },
             {
               "type": "null"
@@ -5616,7 +5792,7 @@
           "description": "Max bits per component the compositor requests.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value22"
+              "$ref": "#/$defs/Value23"
             },
             {
               "type": "null"
@@ -5627,7 +5803,7 @@
           "description": "HDR capabilities as the compositor reports them for the output.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value12"
+              "$ref": "#/$defs/Value13"
             },
             {
               "type": "null"
@@ -5783,7 +5959,7 @@
           "minimum": 0,
           "maximum": 65535
         },
-        "frame_rate_mhz": {
+        "frame_rate_millihz": {
           "description": "Frame rate in millihertz (23.976 fps is `23976`).",
           "type": [
             "integer",
@@ -5841,13 +6017,13 @@
         },
         "format": {
           "description": "Format carried at this hop.",
-          "$ref": "#/$defs/Value32"
+          "$ref": "#/$defs/Value33"
         },
         "rate_kbps": {
           "description": "Data rate carried, in kbit/s (link hops).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value27"
+              "$ref": "#/$defs/Value28"
             },
             {
               "type": "null"
@@ -5858,7 +6034,7 @@
           "description": "Highest data rate this hop can carry, in kbit/s (link hops).",
           "anyOf": [
             {
-              "$ref": "#/$defs/Value27"
+              "$ref": "#/$defs/Value28"
             },
             {
               "type": "null"
@@ -5934,7 +6110,7 @@
         }
       ]
     },
-    "Value32": {
+    "Value33": {
       "description": "A reported value: either known, with where it came from and how sure we are, or explicitly\nunknown with the reason. A layer that can't be read is never reported as \"unsupported\".",
       "oneOf": [
         {
@@ -6010,7 +6186,7 @@
           "minimum": 0,
           "maximum": 65535
         },
-        "rate_mhz": {
+        "rate_millihz": {
           "description": "Refresh or frame rate in millihertz.",
           "type": "integer",
           "format": "uint32",
@@ -6074,7 +6250,7 @@
       "required": [
         "width",
         "height",
-        "rate_mhz"
+        "rate_millihz"
       ]
     },
     "Loss": {

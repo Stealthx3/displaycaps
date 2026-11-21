@@ -26,12 +26,15 @@ pub enum EdidRedaction {
         numeric_serial: bool,
         /// Whether a serial-number descriptor (tag 0xFF) was present.
         serial_descriptor: bool,
+        /// Whether a DisplayID product identification block carried a non-zero serial.
+        displayid_serial: bool,
     },
 }
 
 /// Clears the numeric serial (bytes 12–15) and any serial-number display descriptor (tag 0xFF)
-/// in the EDID base block, then fixes the base-block checksum. Manufacturer, product code, name
-/// and extension blocks (CTA-861 audio data) are kept.
+/// in the EDID base block, and the serial of every DisplayID product identification block
+/// (tag 0x00 in DisplayID 1.x, 0x20 in 2.x) in DisplayID extension blocks, then fixes every
+/// checksum it touched. Manufacturer, product code, name and other blocks are kept.
 pub fn redact_serials(edid: &mut [u8]) -> EdidRedaction {
     if edid.len() < BLOCK || edid[..8] != HEADER {
         return EdidRedaction::NotEdid;
@@ -49,9 +52,16 @@ pub fn redact_serials(edid: &mut [u8]) -> EdidRedaction {
     }
     let sum: u32 = edid[..BLOCK - 1].iter().map(|&b| u32::from(b)).sum();
     edid[BLOCK - 1] = ((256 - (sum % 256)) % 256) as u8;
+    let mut displayid_serial = false;
+    for blk in edid[BLOCK..].as_chunks_mut::<BLOCK>().0 {
+        if blk[0] == 0x70 && redact_displayid(blk) {
+            displayid_serial = true;
+        }
+    }
     EdidRedaction::Redacted {
         numeric_serial,
         serial_descriptor,
+        displayid_serial,
     }
 }
 
@@ -278,6 +288,44 @@ pub fn parse_edid(b: &[u8]) -> Result<Edid, EdidError> {
     })
 }
 
+/// Zeroes the product serial in a DisplayID extension block (EDID tag 0x70) and fixes the
+/// DisplayID section checksum and the EDID block checksum. Returns whether a non-zero serial was
+/// found. Malformed sections are left as they are.
+fn redact_displayid(blk: &mut [u8]) -> bool {
+    // blk[1] version, blk[2] bytes in section, blk[3] product type, blk[4] extension count,
+    // data blocks from blk[5]; the section checksum follows the data blocks.
+    let len = usize::from(blk[2]);
+    let end = 5 + len;
+    if end >= BLOCK - 1 {
+        return false;
+    }
+    let mut found = false;
+    let mut i = 5;
+    while i + 3 <= end {
+        let (tag, plen) = (blk[i], usize::from(blk[i + 2]));
+        let payload = i + 3;
+        if payload + plen > end {
+            break;
+        }
+        // Product identification: 3-byte id, 2-byte product code, 4-byte serial.
+        if (tag == 0x00 || tag == 0x20) && plen >= 9 {
+            let serial = &mut blk[payload + 5..payload + 9];
+            if serial.iter().any(|&b| b != 0) {
+                found = true;
+                serial.fill(0);
+            }
+        }
+        i = payload + plen;
+    }
+    if found {
+        let sum: u32 = blk[1..end].iter().map(|&b| u32::from(b)).sum();
+        blk[end] = ((256 - (sum % 256)) % 256) as u8;
+        let sum: u32 = blk[..BLOCK - 1].iter().map(|&b| u32::from(b)).sum();
+        blk[BLOCK - 1] = ((256 - (sum % 256)) % 256) as u8;
+    }
+    found
+}
+
 /// The serial that feeds the sink key, exactly as AudioCaps v1.0.0 derives it
 /// (`crates/audiocaps-backends/src/assemble/sink.rs`, `edid_serial`): the numeric serial (bytes
 /// 12–15, little-endian, when non-zero) and every serial string descriptor (0xFF), joined by `/`.
@@ -419,7 +467,8 @@ mod tests {
             r,
             EdidRedaction::Redacted {
                 numeric_serial: true,
-                serial_descriptor: true
+                serial_descriptor: true,
+                displayid_serial: false
             }
         );
         assert_eq!(&e[12..16], &[0, 0, 0, 0]);
@@ -478,6 +527,42 @@ mod tests {
         );
         assert_eq!(c.vendor_ouis, vec![OUI_HDMI, OUI_HDMI_FORUM]);
         assert_eq!(c.extended_tags, vec![15]);
+    }
+
+    #[test]
+    fn clears_displayid_product_serial() {
+        let mut b = sample();
+        b.truncate(BLOCK);
+        b[126] = 1;
+        let mut ext = vec![0u8; BLOCK];
+        ext[0] = 0x70; // DisplayID extension
+        ext[1] = 0x20; // DisplayID 2.0
+        ext[2] = 12; // section length: one 3+9-byte product id block
+        let blk = [
+            0x20, 0x00, 9, 0x00, 0x00, 0x5e, 0x34, 0x12, 0xaa, 0xbb, 0xcc, 0xdd,
+        ];
+        ext[5..17].copy_from_slice(&blk);
+        let fix = |e: &mut Vec<u8>| {
+            let s: u32 = e[1..17].iter().map(|&x| u32::from(x)).sum();
+            e[17] = ((256 - (s % 256)) % 256) as u8;
+            let s: u32 = e[..127].iter().map(|&x| u32::from(x)).sum();
+            e[127] = ((256 - (s % 256)) % 256) as u8;
+        };
+        fix(&mut ext);
+        b.extend_from_slice(&ext);
+        let r = redact_serials(&mut b);
+        assert!(matches!(
+            r,
+            EdidRedaction::Redacted {
+                displayid_serial: true,
+                ..
+            }
+        ));
+        let e = &b[BLOCK..];
+        assert_eq!(&e[13..17], &[0, 0, 0, 0], "serial zeroed");
+        assert_eq!(&e[5..13], &blk[..8], "id and product kept");
+        assert_eq!(e[1..18].iter().map(|&x| u32::from(x)).sum::<u32>() % 256, 0);
+        assert_eq!(e.iter().map(|&x| u32::from(x)).sum::<u32>() % 256, 0);
     }
 
     #[test]

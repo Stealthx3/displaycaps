@@ -184,8 +184,8 @@ pub(crate) fn snap(root: &SystemRoot, env: &Env) -> (Vec<String>, Vec<Permission
         "x11",
     );
     // hardware-observe is what opens device attributes such as the DRM connectors' EDID (the
-    // sink chain). Unknown when there is no connector. Only the attribute's readability is
-    // tested; its content is dropped.
+    // sink chain). Unknown when there is no connector. The attribute is opened, never read, so
+    // no sink data is read for an environment-only scope.
     let edid = root.read_dir("/sys/class/drm").ok().and_then(|es| {
         es.iter()
             .filter(|e| e.name.starts_with("card") && e.name.contains('-'))
@@ -193,9 +193,7 @@ pub(crate) fn snap(root: &SystemRoot, env: &Env) -> (Vec<String>, Vec<Permission
             .find(|p| root.exists(p))
     });
     check(
-        live.then_some(edid)
-            .flatten()
-            .map(|p| root.read(&p).is_ok()),
+        live.then_some(edid).flatten().map(|p| root.can_open(&p)),
         "hardware-observe",
     );
     // opengl and gpu-2404 gate device nodes under /dev/dri; judging them would mean opening one.

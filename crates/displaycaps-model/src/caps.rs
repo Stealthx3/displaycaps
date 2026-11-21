@@ -51,7 +51,7 @@ pub struct Mode {
     /// Active height in lines (per frame, so 1080 for 1080i).
     pub height: u16,
     /// Vertical refresh in millihertz (field rate for interlaced modes).
-    pub refresh_mhz: MilliHertz,
+    pub refresh_millihz: MilliHertz,
     /// Interlaced.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub interlaced: bool,
@@ -140,9 +140,9 @@ pub enum ModeSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct VrrRange {
     /// Lowest refresh in millihertz.
-    pub min_mhz: MilliHertz,
+    pub min_millihz: MilliHertz,
     /// Highest refresh in millihertz.
-    pub max_mhz: MilliHertz,
+    pub max_millihz: MilliHertz,
     /// Where the range comes from.
     pub kind: VrrKind,
 }
@@ -150,7 +150,7 @@ pub struct VrrRange {
 impl VrrRange {
     /// Whether low-framerate compensation can work (max at least twice min).
     pub fn supports_lfc(&self) -> bool {
-        u64::from(self.max_mhz) >= 2 * u64::from(self.min_mhz)
+        u64::from(self.max_millihz) >= 2 * u64::from(self.min_millihz)
     }
 }
 
@@ -476,8 +476,8 @@ mod tests {
     #[test]
     fn lfc_needs_twice_min() {
         let r = |min, max| VrrRange {
-            min_mhz: min,
-            max_mhz: max,
+            min_millihz: min,
+            max_millihz: max,
             kind: VrrKind::AdaptiveSync,
         };
         assert!(r(48_000, 120_000).supports_lfc());
@@ -499,7 +499,7 @@ mod tests {
         let m = Mode {
             width: 3840,
             height: 2160,
-            refresh_mhz: 23_976,
+            refresh_millihz: 23_976,
             interlaced: false,
             timing: None,
             vic: Some(93),
@@ -510,7 +510,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&m).unwrap(),
-            r#"{"width":3840,"height":2160,"refresh_mhz":23976,"vic":93,"sources":["cta_vic"]}"#
+            r#"{"width":3840,"height":2160,"refresh_millihz":23976,"vic":93,"sources":["cta_vic"]}"#
         );
     }
 }

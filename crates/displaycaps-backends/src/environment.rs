@@ -67,7 +67,17 @@ fn prov(layer: LayerKind, source: Source, at: u64) -> Provenance {
 
 /// Reads the environment layer.
 pub(crate) fn environment(root: &SystemRoot, env: &Env, now: u64) -> EnvironmentInfo {
-    let os = ["/etc/os-release", "/usr/lib/os-release"]
+    // Inside Flatpak, /etc/os-release describes the runtime; the host's is at /run/host.
+    let candidates: &[&str] = if root.exists("/.flatpak-info") {
+        &[
+            "/run/host/os-release",
+            "/etc/os-release",
+            "/usr/lib/os-release",
+        ]
+    } else {
+        &["/etc/os-release", "/usr/lib/os-release"]
+    };
+    let os = candidates
         .iter()
         .find_map(|p| root.read_string(p).ok().map(|t| (p, t)))
         .map(|(p, text)| {
@@ -103,6 +113,7 @@ pub(crate) fn environment(root: &SystemRoot, env: &Env, now: u64) -> Environment
         kernel,
         sandbox: sandbox(root, env, now),
         session: session(env, now),
+        graphics_driver: None,
     }
 }
 
@@ -133,9 +144,21 @@ pub(crate) fn in_snap(root: &SystemRoot, env: &Env) -> bool {
 
 fn sandbox(root: &SystemRoot, env: &Env, now: u64) -> Value<Sandbox> {
     let p = prov(LayerKind::Environment, Source::file("/.flatpak-info"), now);
-    if let Ok(info) = root.read_string("/.flatpak-info") {
-        let (granted, missing) = crate::sandbox::flatpak(&info);
-        return Value::measured(Sandbox::Flatpak { granted, missing }, p);
+    match root.read_string("/.flatpak-info") {
+        Ok(info) => {
+            let (granted, missing) = crate::sandbox::flatpak(&info);
+            return Value::measured(Sandbox::Flatpak { granted, missing }, p);
+        }
+        Err(e) if root.exists("/.flatpak-info") => {
+            return Value::unknown(
+                UnknownReason::ReadError,
+                Some(format!(
+                    "/.flatpak-info exists but can't be read: {}",
+                    e.kind()
+                )),
+            );
+        }
+        Err(_) => {}
     }
     if in_snap(root, env) {
         let (connected, missing) = crate::sandbox::snap(root, env);

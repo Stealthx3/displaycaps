@@ -245,6 +245,29 @@ pub struct EdidInfo {
     /// Digital input interface from the base block (`hdmi-a`, `displayport`, ...), when stated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interface: Option<String>,
+    /// The Display Range Limits descriptor (tag 0xFD), when present. Its absence is itself a
+    /// signal (SINK_DATA_SUSPECT), so `None` means "not in the EDID".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range_limits: Option<RangeLimits>,
+}
+
+/// The EDID Display Range Limits descriptor. Rates are whole numbers in the descriptor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct RangeLimits {
+    /// Lowest vertical rate, in Hz.
+    pub min_vertical_hz: u16,
+    /// Highest vertical rate, in Hz.
+    pub max_vertical_hz: u16,
+    /// Lowest horizontal rate, in kHz.
+    pub min_horizontal_khz: u16,
+    /// Highest horizontal rate, in kHz.
+    pub max_horizontal_khz: u16,
+    /// Highest pixel clock, in kHz, when stated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_pixel_clock_khz: Option<u32>,
+    /// Timing formula the descriptor names (`default_gtf`, `range_only`, `secondary_gtf`, `cvt`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formula: Option<String>,
 }
 
 /// A device between the GPU and the display (receiver, splitter, extractor, adapter, dock).

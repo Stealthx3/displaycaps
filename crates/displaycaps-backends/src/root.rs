@@ -149,6 +149,17 @@ impl SystemRoot {
         }
     }
 
+    /// Whether a file can be opened for reading, without reading it (sysfs attributes only produce
+    /// their content on read). Fixtures can open whatever they hold.
+    pub fn can_open(&self, path: &str) -> bool {
+        match self {
+            Self::Live => relative(path)
+                .and_then(|r| fs::File::open(Path::new("/").join(r)))
+                .is_ok(),
+            Self::Fixture(_) => self.exists(path),
+        }
+    }
+
     /// Reads a whole file as UTF-8 (lossy).
     pub fn read_string(&self, path: &str) -> io::Result<String> {
         self.read(path)

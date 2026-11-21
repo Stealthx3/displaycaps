@@ -21,6 +21,12 @@ static MAC: LazyLock<Regex> = LazyLock::new(|| {
     // Boundaries are checked by hand in `mac_spans`.
     Regex::new(r"(?i)[0-9a-f]{2}([:_-])[0-9a-f]{2}(?:[:_-][0-9a-f]{2}){4}").expect("regex")
 });
+static UUID: LazyLock<Regex> = LazyLock::new(|| {
+    // Device, board and filesystem UUIDs identify one machine (e.g. vulkaninfo's deviceUUID).
+    Regex::new(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
+        .expect("regex")
+});
+
 static IPV4: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b")
         .expect("regex")
@@ -69,7 +75,8 @@ pub const RULES: &[&str] = &[
     "IPv4 (except loopback) and IPv6 addresses replaced",
     "host name and user name of the capturing machine replaced",
     "JSON values under keys containing 'serial' hashed; machine and session ids removed",
-    "EDID numeric serial and serial descriptor cleared, checksum fixed",
+    "UUIDs (device, board, filesystem) replaced by a zero UUID",
+    "EDID numeric serial, serial descriptor and DisplayID product serial cleared, checksums fixed",
     "DMI serials, product UUID and USB serial attributes are never collected",
 ];
 
@@ -116,6 +123,9 @@ impl Redactor {
     /// Redacts free text.
     pub fn text(&self, s: &str) -> String {
         let mut out = self.macs(s);
+        out = UUID
+            .replace_all(&out, "00000000-0000-0000-0000-000000000000")
+            .into_owned();
         out = IPV4
             .replace_all(&out, |c: &regex::Captures<'_>| match &c[0] {
                 "127.0.0.1" | "0.0.0.0" => c[0].to_string(),
@@ -194,6 +204,13 @@ pub fn leaks(text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uuids_are_replaced() {
+        let r = Redactor::default();
+        let t = r.text("deviceUUID = 4f651871-0a1b-2c3d-4e5f-60718293a4b5"); // pii-scan: allow (synthetic UUID)
+        assert_eq!(t, "deviceUUID = 00000000-0000-0000-0000-000000000000");
+    }
 
     #[test]
     fn macs_are_stable_pseudo_addresses() {

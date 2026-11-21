@@ -164,6 +164,32 @@ pub struct EnvironmentInfo {
     pub sandbox: Value<Sandbox>,
     /// The display session the app runs in.
     pub session: Value<SessionInfo>,
+    /// Where the GL, Vulkan and VA-API drivers this process would load come from (host or a
+    /// sandbox runtime). Filled by the decode layer (opt-in); omitted when not read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graphics_driver: Option<Value<GraphicsDriverSource>>,
+}
+
+/// Where the process's graphics and decode drivers come from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct GraphicsDriverSource {
+    /// Origin of the drivers.
+    pub origin: DriverOrigin,
+    /// Detail, e.g. the Flatpak GL extension name or the content snap.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// Driver origins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DriverOrigin {
+    /// The host system's drivers (not sandboxed).
+    Host,
+    /// A Flatpak runtime GL extension (e.g. `org.freedesktop.Platform.GL.default`).
+    FlatpakExtension,
+    /// A Snap content provider (e.g. `gpu-2404`).
+    SnapContent,
 }
 
 /// The display session.

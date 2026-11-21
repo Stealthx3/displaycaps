@@ -313,7 +313,7 @@ pub enum QuirkEffect {
         /// Height.
         height: u16,
         /// Refresh in millihertz.
-        refresh_mhz: MilliHertz,
+        refresh_millihz: MilliHertz,
     },
     /// An HDR format the sink advertises but handles badly, or doesn't advertise but accepts.
     HdrFormat {

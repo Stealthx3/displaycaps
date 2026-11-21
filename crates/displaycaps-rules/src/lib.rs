@@ -116,6 +116,7 @@ pub(crate) mod tests {
                     },
                     prov(),
                 ),
+                graphics_driver: None,
             }),
             endpoints: vec![],
             content: None,

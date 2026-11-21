@@ -58,6 +58,7 @@ Never two L sessions back to back where limits are tight; Phase 2 is the largest
 ## Log
 - 2026-11-21 — Plan created from AudioCaps' plan. Task 1.4 (data model and schema v1) runs in the main thread on the top tier.
 - 2026-11-21 — Copying the backends/rules/cli/ffi crates was delegated to one sonnet agent (≈290k tokens, 11 min); it worked from a scratchpad export of AudioCaps v1.0.0 and its own lab directory.
+- 2026-11-21 — Gate review by the opus reviewer agent (≈100k tokens) found 11 issues, including two the gate scripts couldn't see (passive checker blind to hex paths; device UUID in a fixture). Keep it for every gate.
 - 2026-11-21 — New tools: oracles.sh, parity-vectors.mjs, parity-audiocaps.sh, check-passive.sh (DRM rules), desktop-session.sh.
 
 ## Handoff

@@ -7,7 +7,8 @@
 //! - only regular files under `/proc`, `/sys` and `/etc` are read, never `/dev`;
 //! - commands may only query, with a timeout, and their output is redacted; every command used
 //!   here is passive: `drm_info` uses `drmModeGetConnectorCurrent` (never a forced probe) and
-//!   takes no DRM master, `xrandr --current` never re-probes outputs, and nothing writes
+//!   never calls SET_MASTER; it and `vulkaninfo` open primary DRM nodes, so they run only inside
+//!   a display session whose compositor already holds master, `xrandr --current` never re-probes outputs, and nothing writes
 //!   KMS, compositor or DDC/CI state. `scripts/check-passive.sh` checks a capture under strace.
 //!
 //! What it saves: os-release and the kernel version; every DRM card and connector under
@@ -229,6 +230,9 @@ const COMMANDS: &[(&str, &[&str])] = &[
     ("vulkaninfo", &["vulkaninfo", "--summary"]),
 ];
 
+/// Commands that open a primary DRM node (`/dev/dri/card*`).
+const PRIMARY_NODE: &[&str] = &["drm_info", "vulkaninfo"];
+
 /// The GPU behind a card: PCI ids, uevent, the driver link, and that driver's module parameters.
 fn copy_gpu(st: &mut Staging, card: &Path) {
     let dev = card.join("device");
@@ -319,7 +323,25 @@ pub fn capture(opts: &Options) -> io::Result<PathBuf> {
         }
         st.copy(Path::new("/sys/class/drm/version"));
     }
+    // drm_info and vulkaninfo open primary /dev/dri/card* nodes. If no compositor holds DRM
+    // master on a card, the kernel makes the first opener master implicitly, and closing it can
+    // restore the console (a visible modeset). Run them only inside a display session.
+    let session =
+        std::env::var_os("WAYLAND_DISPLAY").is_some() || std::env::var_os("DISPLAY").is_some();
     for (name, argv) in COMMANDS {
+        if PRIMARY_NODE.contains(name) && !session {
+            commands.push(CapturedCommand {
+                name: name.to_string(),
+                argv: argv.iter().map(|s| s.to_string()).collect(),
+                exit_code: None,
+                output_file: None,
+                skipped: Some(
+                    "no display session: would open a primary DRM node nothing holds master on"
+                        .into(),
+                ),
+            });
+            continue;
+        }
         let rec = run_command(&mut st, name, argv, &[]);
         commands.push(rec);
     }

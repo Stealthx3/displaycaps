@@ -132,7 +132,7 @@ pub struct VideoFormat {
     /// Height in lines.
     pub height: u16,
     /// Refresh or frame rate in millihertz.
-    pub rate_mhz: MilliHertz,
+    pub rate_millihz: MilliHertz,
     /// Colour format.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color_format: Option<ColorFormat>,
@@ -208,7 +208,7 @@ pub struct ContentRequest {
     pub height: Option<u16>,
     /// Frame rate in millihertz (23.976 fps is `23976`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub frame_rate_mhz: Option<MilliHertz>,
+    pub frame_rate_millihz: Option<MilliHertz>,
     /// HDR format, `None` for SDR content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdr: Option<HdrFormat>,

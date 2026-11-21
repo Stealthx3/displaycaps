@@ -27,6 +27,9 @@ _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 - Pull with `scripts/lab.sh pull '/home/lab/captures/*' captures desktop` before any revert; shut the guest down before starting `main`.
 - `desktop-session.sh` ends only lab's seat0 sessions (not the SSH one) and fails rather than capture the wrong desktop.
 
+## Passive check (scripts/check-passive.sh)
+- Proven in lab-displaycaps-desktop with one negative control per rule (2026-11-21): `modetest -c` (forced probe), `drm_info` with no session (implicit DRM master on a primary node), `cat /dev/i2c-0`, `cat /dev/cec0`, a `dd` write to a connector's sysfs `status`. Each fails; captures and in-session `drm_info` pass.
+
 ## Commands
 - Build: `scripts/lab.sh run 'cargo build --workspace'`
 - Gate:  `scripts/lab.sh run 'bash scripts/gate.sh 2>&1 | tail -n 60'`
