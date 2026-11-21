@@ -14,8 +14,8 @@ const drm = (fx, dev) => path.join(src, 'tests/fixtures', fx, 'root/sys/devices'
 const real = {
   'hisense-55qd5n': drm('htpc', 'pci0000:00/0000:00:03.1/0000:07:00.0/0000:08:00.0/0000:09:00.0/drm/card1/card1-HDMI-A-2'),
   'qemu-virtual': drm('lab-alsa-only', 'pci0000:00/0000:00:01.0/drm/card0/card0-Virtual-1'),
-  'samsung-lc34g55t': drm('workstation', 'pci0000:00/0000:00:03.1/0000:0a:00.0/drm/card1/card1-DP-2'),
-  'lg-fhd': drm('workstation', 'pci0000:00/0000:00:03.1/0000:0a:00.0/drm/card1/card1-DP-3'),
+  'samsung-lc34g55t': drm('workstation', 'pci0000:00/0000:00:03.1/0000:0a:00.0/drm/card1/card1-DP-2'), // pii-scan: allow (PCI bus path, not an address)
+  'lg-fhd': drm('workstation', 'pci0000:00/0000:00:03.1/0000:0a:00.0/drm/card1/card1-DP-3'), // pii-scan: allow (PCI bus path, not an address)
 };
 const fix = (b) => { let s = 0; for (let i = 0; i < 127; i++) s += b[i]; b[127] = (256 - (s % 256)) % 256; return b; };
 const descriptor = (b, tag, text) => { // replace the first non-name display descriptor (or the last slot) with `tag`

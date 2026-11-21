@@ -198,8 +198,8 @@ mod tests {
     #[test]
     fn macs_are_stable_pseudo_addresses() {
         let r = Redactor::default();
-        let a = r.text("dev 00:00:5E:00:53:13 and card.00_00_5E_00_53_13");
-        assert!(!a.contains("00:00:5E"));
+        let a = r.text("dev 00:00:5E:00:53:13 and card.00_00_5E_00_53_13"); // pii-scan: allow (synthetic addresses in a redaction test)
+        assert!(!a.contains("00:00:5E")); // pii-scan: allow (synthetic addresses in a redaction test)
         assert!(!a.contains("00_00_5E"));
         let colon = a.split_whitespace().nth(1).unwrap();
         assert!(colon.starts_with("02:"));
@@ -219,21 +219,21 @@ mod tests {
         assert!(leaks(&s).is_empty());
         assert_eq!(leaks("path dev_00_00_5E_00_53_13").len(), 1);
         // Not an address: part of a longer hex/colon run.
-        assert!(leaks("00:00:5e:00:53:13:77").is_empty());
+        assert!(leaks("00:00:5e:00:53:13:77").is_empty()); // pii-scan: allow (synthetic addresses in a redaction test)
     }
 
     #[test]
     fn re_redaction_keeps_pseudo_addresses() {
-        let once = Redactor::default().text("a 00:00:5E:00:53:13");
+        let once = Redactor::default().text("a 00:00:5E:00:53:13"); // pii-scan: allow (synthetic addresses in a redaction test)
         let twice = Redactor::for_redacted_fixture().text(&once);
         assert_eq!(once, twice);
     }
 
     #[test]
     fn ips_host_user() {
-        let r = Redactor::new(Some("Stealthx3-desk"), Some("alex"));
+        let r = Redactor::new(Some("lab-host"), Some("alex"));
         let t =
-            r.text("sink 192.0.2.12 on Stealthx3-desk by alex; lo 127.0.0.1; fe80::1c2b:3aff:fe4d:1");
+            r.text("sink 192.0.2.12 on lab-host by alex; lo 127.0.0.1; fe80::1c2b:3aff:fe4d:1"); // pii-scan: allow (synthetic addresses in a redaction test)
         assert_eq!(
             t,
             "sink redacted-ipv4 on redacted-host by redacted-user; lo 127.0.0.1; redacted-ipv6"
@@ -245,13 +245,13 @@ mod tests {
         let r = Redactor::default();
         let mut v: Json = serde_json::json!([
             {"info": {"props": {"device.serial": "ABC123", "device.name": "card1-HDMI-A-1"}}},
-            {"machine-id": "0123456789abcdef", "host_name": "Stealthx3-desk"}
+            {"machine-id": "0123456789abcdef", "host_name": "lab-host"}
         ]);
         r.json(&mut v);
         let s = v.to_string();
         assert!(!s.contains("ABC123"));
         assert!(!s.contains("0123456789abcdef"));
-        assert!(!s.contains("Stealthx3-desk"));
+        assert!(!s.contains("lab-host"));
         assert!(s.contains("redacted-serial-"));
         assert!(s.contains("card1-HDMI-A-1"));
         assert!(leaks(&s).is_empty());
@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn leak_scan_flags_real_addresses() {
-        assert_eq!(leaks("x 00:00:5e:00:53:13 y 198.51.100.4").len(), 2);
-        assert!(leaks("version 0000:00:1f.3 1.4.2").is_empty());
+        assert_eq!(leaks("x 00:00:5e:00:53:13 y 198.51.100.4").len(), 2); // pii-scan: allow (synthetic addresses in a redaction test)
+        assert!(leaks("version 0000:00:1f.3 1.4.2").is_empty()); // pii-scan: allow (synthetic addresses in a redaction test)
     }
 }

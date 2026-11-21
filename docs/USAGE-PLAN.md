@@ -15,7 +15,7 @@ _Standard: TOKEN-USAGE-OPTIMIZATION-STANDARD v1 · Created 2026-11-21 · Modelle
 | Codebase inventory, dependency/license audit | haiku | conclusion only |
 | Gate review before each phase hand-off | opus | high-stakes, unanchored review |
 
-The main thread runs on whatever model Stealthx3 picks; work tiered below it is delegated to the agents
+The main thread runs on whatever model the maintainer picks; work tiered below it is delegated to the agents
 below when it is large enough to be worth a brief.
 
 ## Agents (B)

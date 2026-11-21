@@ -5,7 +5,7 @@ once phase 1 adds the shared scripts, add entries with `node scripts/repo-check.
 Open items live in `docs/PLAN.md`.
 
 - **2026-11-09** · action · Wrote the development plan as a sister library to AudioCaps (Claude Docs "DisplayCaps — Development Plan"), including an evaluation of forking libdisplay-info
-- **2026-11-09** · decision · Carried over from AudioCaps: Rust core with a generated C header; LGPL-2.1-or-later; Linux first, Windows and macOS later; Flatpak and Snap compatibility required; information on-demand; the application decides; few languages, bundled use; Claude builds in libvirt VMs and Stealthx3 reviews each phase gate
+- **2026-11-09** · decision · Carried over from AudioCaps: Rust core with a generated C header; LGPL-2.1-or-later; Linux first, Windows and macOS later; Flatpak and Snap compatibility required; information on-demand; the application decides; few languages, bundled use; Claude builds in libvirt VMs and the maintainer reviews each phase gate
 - **2026-11-14** · action · Exported the development plan to PDF for review
 - **2026-11-16** · decision · Sister library in its own repo, built on the AudioCaps design
 - **2026-11-16** · decision · Code reuse: copy AudioCaps v1.0.0's generic code (core types, SystemRoot, capture, redaction, runtime, rule and quirk engine, sink identity and key) and keep it separate; no shared crate — _why:_ each library stays independently releasable
@@ -14,3 +14,11 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-16** · decision · Phase gates: Claude Code stops at every gate and waits for approval (the AudioCaps "continue phase to phase" instruction does not apply here)
 - **2026-11-16** · action · Updated the development plan for these decisions and for the AudioCaps 1.0.0 release; exported PDF and Markdown copies to `docs/plan/` (git-ignored)
 - **2026-11-16** · action · Prepared the repository scaffold and the hand-over to Claude Code: README, LICENSE, NOTICE, changelog, decision log, roadmap, CLI mockup, `CLAUDE.md`, plus git-ignored `docs/plan/local-environment.md` and `docs/plan/claude-code-kickoff.md`
+- **2026-11-21** · approval · One-time host exception: run displaycaps capture once on the workstation under scripts/check-passive.sh (phase 1.6)
+- **2026-11-21** · approval · Create Stealthx3/displaycaps as a public GitHub repo and publish the progress page with GitHub Pages, like AudioCaps
+- **2026-11-21** · approval · Install cbindgen 0.29.2 in the lab guest only (build tool, never linked) to generate include/displaycaps.h
+- **2026-11-21** · action · Added PII-REDACTION-STANDARD to the project — _why:_ nothing in the project may identify the maintainer or the test environment
+- **2026-11-21** · decision · Public identity is the GitHub handle Stealthx3 with its noreply address; this repo commits under it — _why:_ replaces the machine's git identity from CLAUDE.md
+- **2026-11-21** · decision · Replace the maintainer's real name everywhere, including the NOTICE copyright (now Stealthx3), and absolute drive paths in CLAUDE.md
+- **2026-11-21** · decision · Rewrite the local, never-pushed history to remove personal values before the first push
+- **2026-11-21** · note · Lab host details stay out of docs/LAB.md; real values only in git-ignored docs/LAB.local.md

@@ -1,0 +1,9 @@
+{
+  "publicIdentity": {
+    "name": "Stealthx3",
+    "handle": "Stealthx3",
+    "email": "6005279+Stealthx3@users.noreply.github.com"
+  },
+  "allow": ["and", "51 Franklin Street"],
+  "skip": ["scripts/lab.sh"]
+}

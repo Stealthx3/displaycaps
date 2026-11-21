@@ -5,11 +5,17 @@
 //! `displaycaps capture`: saves the files and command outputs that DisplayCaps reads into a
 //! redacted tarball. Read-only and passive:
 //! - only regular files under `/proc`, `/sys` and `/etc` are read, never `/dev`;
-//! - commands (none yet) may only query, with a timeout, and their output is redacted.
+//! - commands may only query, with a timeout, and their output is redacted; every command used
+//!   here is passive: `drm_info` uses `drmModeGetConnectorCurrent` (never a forced probe) and
+//!   takes no DRM master, `xrandr --current` never re-probes outputs, and nothing writes
+//!   KMS, compositor or DDC/CI state. `scripts/check-passive.sh` checks a capture under strace.
 //!
-//! For now the capture holds `/etc/os-release`, `/proc/sys/kernel/osrelease` and the regular files
-//! of each DRM connector under `/sys/class/drm` (status, modes, EDID with the serial zeroed). The
-//! full collectors arrive with the capture work in phase 1 task 1.5.
+//! What it saves: os-release and the kernel version; every DRM card and connector under
+//! `/sys/class/drm` (status, modes, enabled, dpms, EDID with the serial zeroed) and the GPU's PCI
+//! ids and driver link; the display driver's module parameters (e.g. amdgpu's feature masks);
+//! `drm_info -j`; the compositor's output state (`wayland-info`, `kscreen-doctor -j`,
+//! `wlr-randr --json`, Mutter's `GetCurrentState`, `xrandr --current --verbose`); and `vainfo` and
+//! `vulkaninfo --summary`. A tool that isn't installed is recorded as skipped.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -25,7 +31,6 @@ use displaycaps_parse::edid;
 use crate::redact::{RULES, Redactor};
 
 const MAX_FILE: u64 = 1 << 20;
-#[allow(dead_code)] // used by `run_command`, which the collectors of task 1.5 call
 const CMD_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Options for a capture.
@@ -127,7 +132,6 @@ impl Staging {
 }
 
 /// Runs one query command with a timeout and stores its redacted output under `commands/`.
-#[allow(dead_code)] // the collectors of task 1.5 record their commands through this
 fn run_command(
     st: &mut Staging,
     name: &str,
@@ -200,6 +204,62 @@ fn run_command(
     rec
 }
 
+/// Query commands, run with the capturing user's environment (so they reach the session).
+const COMMANDS: &[(&str, &[&str])] = &[
+    ("drm_info", &["drm_info", "-j"]),
+    ("wayland-info", &["wayland-info"]),
+    ("kscreen-doctor", &["kscreen-doctor", "-j"]),
+    ("wlr-randr", &["wlr-randr", "--json"]),
+    (
+        "mutter-displayconfig",
+        &[
+            "gdbus",
+            "call",
+            "--session",
+            "--dest",
+            "org.gnome.Mutter.DisplayConfig",
+            "--object-path",
+            "/org/gnome/Mutter/DisplayConfig",
+            "--method",
+            "org.gnome.Mutter.DisplayConfig.GetCurrentState",
+        ],
+    ),
+    ("xrandr", &["xrandr", "--current", "--verbose"]),
+    ("vainfo", &["vainfo"]),
+    ("vulkaninfo", &["vulkaninfo", "--summary"]),
+];
+
+/// The GPU behind a card: PCI ids, uevent, the driver link, and that driver's module parameters.
+fn copy_gpu(st: &mut Staging, card: &Path) {
+    let dev = card.join("device");
+    for f in [
+        "vendor",
+        "device",
+        "subsystem_vendor",
+        "subsystem_device",
+        "class",
+        "revision",
+        "uevent",
+        "driver",
+        "boot_vga",
+    ] {
+        st.copy(&dev.join(f));
+    }
+    if let Ok(real) = fs::canonicalize(&dev) {
+        st.copy(&real.join("driver"));
+    }
+    let driver = fs::read_link(dev.join("driver"))
+        .ok()
+        .and_then(|t| t.file_name().map(|n| n.to_string_lossy().into_owned()));
+    for m in driver
+        .iter()
+        .map(String::as_str)
+        .chain(["drm", "drm_kms_helper"])
+    {
+        st.copy_tree(&Path::new("/sys/module").join(m).join("parameters"), 1);
+    }
+}
+
 /// Runs a capture and returns the tarball path.
 pub fn capture(opts: &Options) -> io::Result<PathBuf> {
     let now_ms = SystemTime::now()
@@ -220,6 +280,7 @@ pub fn capture(opts: &Options) -> io::Result<PathBuf> {
     let user = std::env::var("USER")
         .ok()
         .or_else(|| std::env::var("LOGNAME").ok());
+    let mut commands = Vec::new();
     let mut st = Staging {
         dir: dir.clone(),
         redactor: Redactor::new(host.as_deref(), user.as_deref()),
@@ -244,15 +305,23 @@ pub fn capture(opts: &Options) -> io::Result<PathBuf> {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            // Connectors only (cardN-HDMI-A-1), not render nodes or cards.
-            if !n.starts_with("card") || !n.contains('-') {
+            // Cards (card1) and connectors (card1-HDMI-A-1), not render nodes.
+            if !n.starts_with("card") {
                 continue;
             }
             st.copy(&p);
             if let Ok(real) = fs::canonicalize(&p) {
                 st.copy_tree(&real, 1);
+                if !n.contains('-') {
+                    copy_gpu(&mut st, &real);
+                }
             }
         }
+        st.copy(Path::new("/sys/class/drm/version"));
+    }
+    for (name, argv) in COMMANDS {
+        let rec = run_command(&mut st, name, argv, &[]);
+        commands.push(rec);
     }
 
     let manifest = Manifest {
@@ -264,7 +333,7 @@ pub fn capture(opts: &Options) -> io::Result<PathBuf> {
             flatpak: Path::new("/.flatpak-info").exists(),
         },
         file_count: st.files,
-        commands: vec![],
+        commands,
         redaction: RULES.iter().map(|s| s.to_string()).collect(),
         notes: st.notes.clone(),
     };
@@ -310,7 +379,7 @@ mod tests {
         fs::create_dir_all(dir.join("commands")).unwrap();
         Staging {
             dir,
-            redactor: Redactor::new(Some("Stealthx3-desk"), None),
+            redactor: Redactor::new(Some("lab-host"), None),
             files: 0,
             seen: BTreeSet::new(),
             notes: vec![],
@@ -322,7 +391,7 @@ mod tests {
         let mut st = staging("copy");
         let src = st.dir.join("live");
         fs::create_dir_all(&src).unwrap();
-        fs::write(src.join("uevent"), "HOST=Stealthx3-desk\n").unwrap();
+        fs::write(src.join("uevent"), "HOST=lab-host\n").unwrap();
         // A 128-byte base block with serial 0xDEADBEEF and a valid checksum.
         let mut edid_bytes = vec![0u8; 128];
         edid_bytes[..8].copy_from_slice(&[0, 255, 255, 255, 255, 255, 255, 0]);
@@ -372,7 +441,7 @@ mod tests {
     #[test]
     fn run_command_records_output_and_skips_missing_tools() {
         let mut st = staging("cmd");
-        let rec = run_command(&mut st, "echo", &["echo", "host Stealthx3-desk"], &[]);
+        let rec = run_command(&mut st, "echo", &["echo", "host lab-host"], &[]);
         assert_eq!(rec.exit_code, Some(0));
         let file = rec.output_file.expect("output stored");
         let text = fs::read_to_string(st.dir.join("commands").join(file)).unwrap();

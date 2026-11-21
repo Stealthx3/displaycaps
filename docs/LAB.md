@@ -2,9 +2,10 @@
 _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 
 ## Host (from lab.sh doctor)
-- virt-install 5.1.0, virt-manager: yes, KVM: yes, LXC driver: yes
-- Network: default (NAT) · Pool: default (/var/lib/libvirt/images)
-- Host: 16 CPUs, 125 GB RAM. Other projects' guests may be running; keep one DisplayCaps guest up at a time.
+- `lab.sh doctor`: OK (virt-install with cloud-init, virt-manager, KVM, LXC driver all present)
+- Network: default (NAT) · Pool: default
+- Host meets the requirements; other projects' guests may be running, so keep one DisplayCaps guest up at a time.
+- Real host details, if ever needed, go in git-ignored `docs/LAB.local.md` (PII-REDACTION-STANDARD §6).
 
 ## Guest decision (§2)
 | Role | Kind | Rule | "Yes" answers | Note |
@@ -27,7 +28,7 @@ _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 - Watch: `scripts/lab.sh view`
 
 ## Host exceptions
-- Real-hardware runs (workstation, HTPC) need a one-time OK from Stealthx3 per test (CLAUDE.md).
+- Real-hardware runs (workstation, HTPC) need a one-time OK from the maintainer per test (CLAUDE.md).
 
 ## Log
 - 2026-11-21 — doctor OK; Debian 13 base present. lab-displaycaps-main created and provisioned (Rust 1.99.1, cargo-deny 0.22.0, cargo-fuzz 0.13.2).
