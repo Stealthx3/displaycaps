@@ -1,0 +1,66 @@
+# ---------------------------------------------------------------
+# Plan documents (local review copies only; the live plan is the
+# Claude Docs "DisplayCaps — Development Plan"). Never commit these.
+# ---------------------------------------------------------------
+docs/plan/
+DisplayCaps-Development-Plan*.pdf
+DisplayCaps-Development-Plan*.md
+DisplayCaps-Development-Plan*.docx
+*Three Development Plans*
+
+# ---------------------------------------------------------------
+# Rust / Cargo
+# ---------------------------------------------------------------
+/target/
+**/*.rs.bk
+*.pdb
+
+# Fuzzing output
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+/fuzz/coverage/
+/fuzz/logs/
+
+# ---------------------------------------------------------------
+# Raw system captures (may contain serials, MAC addresses, EDIDs).
+# Only redacted fixtures under tests/fixtures/ are committed.
+# ---------------------------------------------------------------
+/captures/
+*.capture.tar*
+
+# ---------------------------------------------------------------
+# Build and packaging output
+# ---------------------------------------------------------------
+/build/
+/dist/
+/.flatpak-builder/
+/flatpak-build/
+/repo/
+/parts/
+/stage/
+/prime/
+*.snap
+*.flatpak
+
+# ---------------------------------------------------------------
+# Editors and OS clutter
+# ---------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Claude Code personal files (CLAUDE.md itself is committed)
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/*.local.json
+
+# Local environment and secrets
+.env
+.env.*
+*.local
+.claude/phone-alerts.local.json
