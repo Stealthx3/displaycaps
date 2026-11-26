@@ -58,8 +58,8 @@
       "layer": "link",
       "availability": {
         "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "reason": "not_exposed",
+        "detail": "the capture has no drm_info output (taken outside a display session)"
       }
     },
     {
@@ -266,6 +266,15 @@
         },
         {
           "layer": "kms",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
+        },
+        {
+          "layer": "link",
           "availability": {
             "state": "unknown",
             "reason": "not_exposed",
@@ -1787,6 +1796,15 @@
             "detail": "the capture has no drm_info output (taken outside a display session)"
           },
           "caps": {}
+        },
+        {
+          "layer": "link",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
         }
       ]
     },
@@ -2351,9 +2369,23 @@
           }
         },
         "chain": {
-          "state": "unknown",
-          "reason": "not_implemented",
-          "detail": "devices in between are detected from the connector and link layers"
+          "state": "known",
+          "value": [
+            {
+              "kind": "adapter",
+              "confidence": "inferred",
+              "evidence": "HDMI sink EDID on a DisplayPort connector"
+            }
+          ],
+          "confidence": "inferred",
+          "provenance": {
+            "layer": "sink_chain",
+            "source": {
+              "kind": "derived",
+              "from": "connector type, sink EDID and MST path"
+            },
+            "read_at_ms": 1795262845660
+          }
         }
       },
       "layers": [
@@ -2836,6 +2868,15 @@
             "detail": "the capture has no drm_info output (taken outside a display session)"
           },
           "caps": {}
+        },
+        {
+          "layer": "link",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
         }
       ]
     },
@@ -2967,6 +3008,15 @@
         },
         {
           "layer": "kms",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
+        },
+        {
+          "layer": "link",
           "availability": {
             "state": "unknown",
             "reason": "not_exposed",

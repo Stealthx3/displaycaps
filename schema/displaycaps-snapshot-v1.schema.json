@@ -5312,6 +5312,36 @@
         }
       ]
     },
+    "RejectedFormat": {
+      "description": "A link format that was not used, and why.",
+      "type": "object",
+      "properties": {
+        "color_format": {
+          "description": "Colour format.",
+          "$ref": "#/$defs/ColorFormat"
+        },
+        "bit_depth": {
+          "description": "Bits per component.",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "dsc": {
+          "description": "With DSC.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Why it was not used.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "color_format",
+        "bit_depth",
+        "reason"
+      ]
+    },
     "LinkState": {
       "description": "The signal on the wire, worked out from the mode, the properties and the link limits.\nAlways `inferred`: KMS reports what was requested, not always what was negotiated.",
       "type": "object",
@@ -5363,6 +5393,13 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "rejected": {
+          "description": "Better formats the link could not carry, best first, each with the reason: what explains a\nfallback (e.g. RGB 10-bit rejected because FRL is off in the driver).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RejectedFormat"
           }
         }
       },

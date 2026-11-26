@@ -55,9 +55,7 @@
     {
       "layer": "link",
       "availability": {
-        "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "state": "read"
       }
     },
     {
@@ -1624,6 +1622,104 @@
                 },
                 "read_at_ms": 1795262827698
               }
+            }
+          }
+        },
+        {
+          "layer": "link",
+          "availability": {
+            "state": "read"
+          },
+          "caps": {
+            "link": {
+              "state": "known",
+              "value": {
+                "max_bpc": 8
+              },
+              "confidence": "inferred",
+              "provenance": {
+                "layer": "link",
+                "source": {
+                  "kind": "derived",
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                },
+                "read_at_ms": 1795262827698
+              }
+            }
+          },
+          "detail": {
+            "layer": "link",
+            "signal": {
+              "state": "known",
+              "value": {
+                "kind": "virtual"
+              },
+              "confidence": "inferred",
+              "provenance": {
+                "layer": "link",
+                "source": {
+                  "kind": "derived",
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "color_format": {
+              "state": "known",
+              "value": "rgb",
+              "confidence": "inferred",
+              "provenance": {
+                "layer": "link",
+                "source": {
+                  "kind": "derived",
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "bit_depth": {
+              "state": "known",
+              "value": 8,
+              "confidence": "inferred",
+              "provenance": {
+                "layer": "link",
+                "source": {
+                  "kind": "derived",
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "dsc": {
+              "state": "known",
+              "value": false,
+              "confidence": "inferred",
+              "provenance": {
+                "layer": "link",
+                "source": {
+                  "kind": "derived",
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "required_kbps": {
+              "state": "known",
+              "value": 2575200,
+              "confidence": "inferred",
+              "provenance": {
+                "layer": "link",
+                "source": {
+                  "kind": "derived",
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "capacity_kbps": {
+              "state": "unknown",
+              "reason": "not_exposed",
+              "detail": "no link capacity"
             }
           }
         }

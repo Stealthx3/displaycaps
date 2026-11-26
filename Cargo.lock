@@ -112,6 +112,7 @@ dependencies = [
 name = "displaycaps-backends"
 version = "0.1.0"
 dependencies = [
+ "displaycaps-link",
  "displaycaps-model",
  "displaycaps-parse",
  "displaycaps-rules",
@@ -154,6 +155,9 @@ dependencies = [
 [[package]]
 name = "displaycaps-link"
 version = "0.1.0"
+dependencies = [
+ "displaycaps-model",
+]
 
 [[package]]
 name = "displaycaps-model"
