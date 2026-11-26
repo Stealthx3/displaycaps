@@ -17,10 +17,12 @@ Crate boundaries as built. The design is in the development plan; this file trac
 - **Scoped and passive.** Every probe takes a `ProbeScope`; nothing outside it is read. Readers
   never set KMS state, never take DRM master, never force a connector probe, never touch I2C or
   CEC unless the app opted in. `scripts/check-passive.sh` enforces this under strace.
-- **KMS only inside a display session.** Opening `/dev/dri/card*` when no compositor is DRM
-  master would make the process master implicitly, so the KMS layer is `unknown` (`no_session`)
-  outside a Wayland or X11 session. Connectors are read with `GETCONNECTOR` and a one-mode stub
-  (the kernel's cached state, as `drmModeGetConnectorCurrent` does). No libdrm is linked: the
+- **KMS only where a compositor holds master.** Opening `/dev/dri/card*` when no process is DRM
+  master would make this one master implicitly, so a card is opened only inside a Wayland or X11
+  session whose logind session is seat0's active one (when logind's state is readable), and only
+  if one of its connectors drives a CRTC. Otherwise the KMS layer is `unknown` with the reason.
+  Only the connectors in scope (and the CRTCs driving them) are read; the change poll is opt-in. Connectors are read with `GETCONNECTOR` and a one-mode stub
+  (the kernel's cached state, as `drmModeGetConnectorCurrent` does), issued directly through `drm-ffi` so `count_modes` is never 0. No libdrm is linked: the
   pure-Rust `drm` crate makes the same ioctls without `unsafe` in this workspace.
 - **Unknown, never unsupported.** A layer that can't be read (sandbox, missing library, no
   session) is `unknown` with a reason.

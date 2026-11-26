@@ -54,9 +54,42 @@ pub(crate) struct SysRead {
     /// Cards and connectors, or why `/sys/class/drm` couldn't be listed.
     pub tree: Option<SysTree>,
     /// EDID bytes per connector name (connected connectors in scope only).
-    pub edids: BTreeMap<String, Result<Vec<u8>, String>>,
+    pub edids: BTreeMap<String, Result<Vec<u8>, (UnknownReason, String)>>,
     /// Module parameters per module (driver detail only).
     pub params: BTreeMap<String, Vec<ModuleParameter>>,
+}
+
+/// What the KMS backend reads on one card.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CardPlan {
+    /// `card0`.
+    pub card: String,
+    /// KMS connector ids in scope; `None` reads every connector (sysfs has no `connector_id`).
+    pub connectors: Option<Vec<u32>>,
+    /// Connectors whose EDID blob is read: the sink is wanted and sysfs can't give the EDID.
+    pub edid_for: Vec<u32>,
+    /// Whether `HDR_OUTPUT_METADATA` blobs are read.
+    pub hdr: bool,
+}
+
+/// One card's outcome.
+#[derive(Debug, Clone)]
+pub(crate) enum CardResult {
+    /// Read.
+    Read(KmsCard),
+    /// Not opened, with the reason.
+    Skipped(String, UnknownReason, String),
+    /// Opening or reading failed.
+    Failed(String, UnknownReason, String),
+}
+
+impl CardResult {
+    fn card(&self) -> &str {
+        match self {
+            Self::Read(k) => &k.card,
+            Self::Skipped(c, ..) | Self::Failed(c, ..) => c,
+        }
+    }
 }
 
 /// What KMS gave.
@@ -66,15 +99,13 @@ pub(crate) enum KmsRead {
     NotInScope,
     /// Not readable, with the reason.
     Unreadable(UnknownReason, String),
-    /// Cards read (a card that failed is listed with its error).
-    Cards(Vec<Result<KmsCard, (String, String)>>),
+    /// Per card in scope.
+    Cards(Vec<CardResult>),
 }
 
-/// Whether KMS may be read here and how. On the live system the primary node is opened only
-/// inside a Wayland or X11 session (the compositor is DRM master; opening the node with no master
-/// would make this process master implicitly).
+/// Whether KMS may be read here and how.
 pub(crate) enum KmsAccess {
-    /// Read the live cards.
+    /// Read the live cards (each card still has to pass [`kms_plan`]).
     Live,
     /// Replay the fixture's `drm_info -j` output.
     Fixture(Vec<u8>),
@@ -82,6 +113,14 @@ pub(crate) enum KmsAccess {
     No(UnknownReason, String),
 }
 
+/// Whether the live KMS state may be read. Opening `/dev/dri/cardN` while no process is DRM
+/// master of it makes the opener master implicitly (and its last close restores the console's
+/// mode), so cards are opened only where a compositor holds master:
+/// - the process is in a Wayland or X11 session (environment), and
+/// - when logind's state is readable (`/run/systemd/seats/seat0`), seat0's active session is a
+///   graphical one, so its compositor holds master now (not switched away to a text console).
+///
+/// Each card must also drive an output ([`kms_plan`]).
 pub(crate) fn kms_access(root: &SystemRoot, env: &Env) -> KmsAccess {
     match root {
         SystemRoot::Fixture(_) => match root.captured_command("drm_info") {
@@ -91,72 +130,200 @@ pub(crate) fn kms_access(root: &SystemRoot, env: &Env) -> KmsAccess {
                 "the capture has no drm_info output (taken outside a display session)".into(),
             ),
         },
-        SystemRoot::Live => match crate::environment::session_kind(env) {
-            SessionKind::Wayland | SessionKind::X11 => KmsAccess::Live,
-            _ => KmsAccess::No(
-                UnknownReason::NoSession,
-                "no display session: opening /dev/dri/card* would make this process DRM master"
-                    .into(),
-            ),
-        },
-    }
-}
-
-/// Reads KMS for the cards on this system.
-pub(crate) fn read_kms(root: &SystemRoot, access: KmsAccess, blobs: &[&str]) -> KmsRead {
-    match access {
-        KmsAccess::No(r, d) => KmsRead::Unreadable(r, d),
-        KmsAccess::Fixture(json) => match kms::from_drm_info(&json) {
-            Ok(cards) => KmsRead::Cards(cards.into_iter().map(Ok).collect()),
-            Err(e) => KmsRead::Unreadable(UnknownReason::ParseError, format!("drm_info: {e}")),
-        },
-        KmsAccess::Live => {
-            let names: Vec<String> = match root.read_dir(sysfs::CLASS) {
-                Ok(v) => v
-                    .into_iter()
-                    .map(|e| e.name)
-                    .filter(|n| {
-                        n.strip_prefix("card")
-                            .is_some_and(|r| !r.is_empty() && r.chars().all(|c| c.is_ascii_digit()))
-                    })
-                    .collect(),
-                Err(e) => {
-                    return KmsRead::Unreadable(
-                        UnknownReason::ReadError,
-                        format!("{}: {e}", sysfs::CLASS),
-                    );
-                }
-            };
-            let cards: Vec<_> = names
-                .iter()
-                .map(|n| kms_live::read_card(n, blobs).map_err(|e| (n.clone(), e.to_string())))
-                .collect();
-            if !cards.is_empty() && cards.iter().all(Result::is_err) {
-                let (reason, what) = match &cards[0] {
-                    Err((_, e)) if e.contains("ermission") || e.contains("No such file") => (
-                        UnknownReason::NotGranted,
-                        "no access to /dev/dri (Flatpak: --device=dri; Snap: the opengl interface)",
-                    ),
-                    _ => (UnknownReason::ReadError, "every card failed"),
-                };
-                let detail = cards
-                    .iter()
-                    .filter_map(|c| c.as_ref().err().map(|(n, e)| format!("{n}: {e}")))
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                return KmsRead::Unreadable(reason, format!("{what}: {detail}"));
+        SystemRoot::Live => {
+            if !matches!(
+                crate::environment::session_kind(env),
+                SessionKind::Wayland | SessionKind::X11
+            ) {
+                return KmsAccess::No(
+                    UnknownReason::NoSession,
+                    "no display session: opening /dev/dri/card* would make this process DRM master"
+                        .into(),
+                );
             }
-            KmsRead::Cards(cards)
+            match seat0_graphical(root) {
+                Some(false) => KmsAccess::No(
+                    UnknownReason::NoSession,
+                    "seat0's active session is not graphical (switched to a text console?): no \
+                     compositor holds DRM master"
+                        .into(),
+                ),
+                // Graphical, or logind's state isn't visible here (sandbox, no systemd).
+                _ => KmsAccess::Live,
+            }
         }
     }
 }
 
-/// A fingerprint of the live KMS state of every card (properties and modes; no blobs read), for
-/// the watch's change detection. Read-only, like every KMS read.
-pub(crate) fn kms_signature() -> Option<String> {
-    match read_kms(&SystemRoot::Live, KmsAccess::Live, &[]) {
+/// Whether seat0's active session is a Wayland or X11 session, from logind's state files.
+/// `None` when they can't be read.
+fn seat0_graphical(root: &SystemRoot) -> Option<bool> {
+    let field = |text: &str, key: &str| {
+        text.lines()
+            .find_map(|l| l.strip_prefix(key)?.strip_prefix('='))
+            .map(str::to_string)
+    };
+    let seat = root.read_string("/run/systemd/seats/seat0").ok()?;
+    let Some(id) = field(&seat, "ACTIVE").filter(|s| !s.is_empty()) else {
+        return Some(false);
+    };
+    if id.contains('/') || id.contains("..") {
+        return Some(false);
+    }
+    let session = root
+        .read_string(&format!("/run/systemd/sessions/{id}"))
+        .ok()?;
+    let graphical = matches!(field(&session, "TYPE").as_deref(), Some("wayland" | "x11"));
+    let active = field(&session, "STATE").as_deref() == Some("active");
+    Some(graphical && active)
+}
+
+/// The cards to read and what to read on each, from sysfs, for the scope. A card is left out when
+/// none of its connectors is in scope; on the live system it is also skipped (not opened) when
+/// none of its connectors drives a CRTC: a card that shows nothing has no compositor holding its
+/// master, and opening it could also wake a runtime-suspended GPU.
+pub(crate) fn kms_plan(
+    root: &SystemRoot,
+    scope: &ProbeScope,
+    live: bool,
+) -> Result<(Vec<CardPlan>, Vec<CardResult>), (UnknownReason, String)> {
+    let (cards, conns) =
+        sysfs::scan(root).map_err(|e| (io_reason(&e), format!("{}: {e}", sysfs::CLASS)))?;
+    let sink = scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope);
+    let mut plans = vec![];
+    let mut skipped = vec![];
+    for card in &cards {
+        let mine: Vec<&SysConnector> = conns.iter().filter(|c| c.card == card.name).collect();
+        let in_scope: Vec<&&SysConnector> = mine
+            .iter()
+            .filter(|c| connector_in_scope(scope, c))
+            .collect();
+        if in_scope.is_empty() {
+            continue;
+        }
+        if live && !mine.iter().any(|c| c.enabled == Some(true)) {
+            skipped.push(CardResult::Skipped(
+                card.name.clone(),
+                UnknownReason::NotExposed,
+                format!(
+                    "{} drives no output: not opened (no compositor holds its DRM master)",
+                    card.name
+                ),
+            ));
+            continue;
+        }
+        let ids: Option<Vec<u32>> = in_scope.iter().map(|c| c.connector_id).collect();
+        let edid_for = if sink && live {
+            in_scope
+                .iter()
+                .filter(|c| c.status == Some(ConnectionStatus::Connected))
+                .filter(|c| !root.can_open(&c.edid_path()))
+                .filter_map(|c| c.connector_id)
+                .collect()
+        } else {
+            vec![]
+        };
+        plans.push(CardPlan {
+            card: card.name.clone(),
+            connectors: ids,
+            edid_for,
+            hdr: scope.fields.includes(&FieldGroup::Hdr),
+        });
+    }
+    Ok((plans, skipped))
+}
+
+fn io_reason(e: &std::io::Error) -> UnknownReason {
+    match e.kind() {
+        std::io::ErrorKind::NotFound => UnknownReason::NotExposed,
+        std::io::ErrorKind::PermissionDenied => UnknownReason::NotGranted,
+        _ => UnknownReason::ReadError,
+    }
+}
+
+/// Reads one planned card.
+pub(crate) fn read_planned(root: &SystemRoot, access: &KmsAccess, plan: &CardPlan) -> CardResult {
+    match access {
+        KmsAccess::No(r, d) => CardResult::Skipped(plan.card.clone(), *r, d.clone()),
+        KmsAccess::Fixture(json) => match kms::from_drm_info(json) {
+            Ok(cards) => match cards.into_iter().find(|c| c.card == plan.card) {
+                Some(mut c) => {
+                    if let Some(ids) = &plan.connectors {
+                        c.connectors.retain(|k| ids.contains(&k.id));
+                    }
+                    CardResult::Read(c)
+                }
+                None => CardResult::Skipped(
+                    plan.card.clone(),
+                    UnknownReason::NotExposed,
+                    "not in the captured drm_info output".into(),
+                ),
+            },
+            Err(e) => CardResult::Failed(
+                plan.card.clone(),
+                UnknownReason::ParseError,
+                format!("drm_info: {e}"),
+            ),
+        },
+        KmsAccess::Live => {
+            let _ = root;
+            match kms_live::read_card(plan) {
+                Ok(c) => CardResult::Read(c),
+                Err(e) => {
+                    let reason = match io_reason(&e) {
+                        UnknownReason::NotExposed | UnknownReason::NotGranted => {
+                            UnknownReason::NotGranted
+                        }
+                        r => r,
+                    };
+                    let hint = if reason == UnknownReason::NotGranted {
+                        " (Flatpak: --device=dri; Snap: the opengl interface)"
+                    } else {
+                        ""
+                    };
+                    CardResult::Failed(
+                        plan.card.clone(),
+                        reason,
+                        format!("/dev/dri/{}: {e}{hint}", plan.card),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// Plans and reads every card in scope in one go (tools and the watch's change detection).
+pub(crate) fn read_kms(root: &SystemRoot, access: &KmsAccess, scope: &ProbeScope) -> KmsRead {
+    if let KmsAccess::No(r, d) = access {
+        return KmsRead::Unreadable(*r, d.clone());
+    }
+    let live = matches!(access, KmsAccess::Live);
+    match kms_plan(root, scope, live) {
+        Err((r, d)) => KmsRead::Unreadable(r, d),
+        Ok((plans, mut out)) => {
+            out.extend(plans.iter().map(|p| read_planned(root, access, p)));
+            KmsRead::Cards(out)
+        }
+    }
+}
+
+/// A fingerprint of the live KMS state of the scope's connectors (properties and modes; no blobs
+/// read), for the watch's change detection. `None` when KMS may not be read now: the session is
+/// re-checked on every call.
+pub(crate) fn kms_signature(scope: &ProbeScope, env: &Env) -> Option<String> {
+    let access = kms_access(&SystemRoot::Live, env);
+    let mut scope = scope.clone();
+    // Never read blobs for a fingerprint.
+    scope.fields = displaycaps_model::Selection::Only(vec![]);
+    match read_kms(&SystemRoot::Live, &access, &scope) {
         KmsRead::Cards(cards) => {
-            let ok: Vec<_> = cards.into_iter().flatten().collect();
+            let ok: Vec<_> = cards
+                .into_iter()
+                .filter_map(|c| match c {
+                    CardResult::Read(k) => Some(k),
+                    _ => None,
+                })
+                .collect();
             serde_json::to_string(&ok).ok()
         }
         _ => None,
@@ -165,19 +332,35 @@ pub(crate) fn kms_signature() -> Option<String> {
 
 /// KMS as normalized fact lines, for comparing this crate's live read-only KMS reader with
 /// `drm_info -j` (the phase 3 gate, `scripts/kms-diff.sh`, lab only). With `drm_info_json`, the
-/// facts come from that output instead of the ioctls. Live reads need a display session.
+/// facts come from that output instead of the ioctls. Live reads go through the same checks as a
+/// probe (display session, cards that drive an output). Lab tooling, not part of the API.
+#[doc(hidden)]
 pub fn kms_facts(drm_info_json: Option<&[u8]>) -> Result<Vec<String>, String> {
     let cards = match drm_info_json {
         Some(j) => kms::from_drm_info(j)?,
-        None => match read_kms(&SystemRoot::Live, KmsAccess::Live, &[]) {
-            KmsRead::Cards(c) => c
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|(n, e)| format!("{n}: {e}"))?,
-            KmsRead::Unreadable(r, d) => return Err(format!("{r:?}: {d}")),
-            KmsRead::NotInScope => return Err("not read".into()),
-        },
+        None => {
+            let access = kms_access(&SystemRoot::Live, &Env::Process);
+            match read_kms(&SystemRoot::Live, &access, &ProbeScope::everything()) {
+                KmsRead::Cards(c) => c
+                    .into_iter()
+                    .map(|c| match c {
+                        CardResult::Read(k) => Ok(k),
+                        CardResult::Skipped(n, r, d) | CardResult::Failed(n, r, d) => {
+                            Err(format!("{n}: {r:?}: {d}"))
+                        }
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                KmsRead::Unreadable(r, d) => return Err(format!("{r:?}: {d}")),
+                KmsRead::NotInScope => return Err("not read".into()),
+            }
+        }
     };
+    // The library reads only the CRTCs that drive a connector; compare drm_info on the same basis.
+    let mut cards = cards;
+    for c in &mut cards {
+        let used: Vec<u32> = c.connectors.iter().filter_map(|k| k.crtc).collect();
+        c.crtcs.retain(|k| used.contains(&k.id));
+    }
     let mut out = std::collections::BTreeSet::new();
     let prop = |obj: &str, p: &kms::KmsProp| match &p.enum_name {
         Some(e) => format!("{obj} prop {} = {e}", p.name),
@@ -245,21 +428,15 @@ pub fn kms_facts(drm_info_json: Option<&[u8]>) -> Result<Vec<String>, String> {
 /// Reads sysfs for the scope: the tree, then EDIDs and parameters as the scope asks.
 pub(crate) fn read_sysfs(root: &SystemRoot, scope: &ProbeScope) -> SysRead {
     let mut out = SysRead::default();
-    let tree = sysfs::scan(root).map_err(|e| {
-        let reason = match e.kind() {
-            std::io::ErrorKind::NotFound => UnknownReason::NotExposed,
-            std::io::ErrorKind::PermissionDenied => UnknownReason::NotGranted,
-            _ => UnknownReason::ReadError,
-        };
-        (reason, format!("{}: {e}", sysfs::CLASS))
-    });
+    let tree = sysfs::scan(root).map_err(|e| (io_reason(&e), format!("{}: {e}", sysfs::CLASS)));
     if let Ok((cards, conns)) = &tree {
         if scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope) {
             for c in conns.iter().filter(|c| connector_in_scope(scope, c)) {
                 if c.status == Some(ConnectionStatus::Connected) {
                     out.edids.insert(
                         c.name.clone(),
-                        root.read(&c.edid_path()).map_err(|e| e.to_string()),
+                        root.read(&c.edid_path())
+                            .map_err(|e| (io_reason(&e), e.to_string())),
                     );
                 }
             }
@@ -351,7 +528,10 @@ fn kms_match<'a>(kms: &'a KmsRead, c: &SysConnector) -> Option<(&'a KmsCard, &'a
     let KmsRead::Cards(cards) = kms else {
         return None;
     };
-    let card = cards.iter().flatten().find(|k| k.card == c.card)?;
+    let card = cards.iter().find_map(|r| match r {
+        CardResult::Read(k) if k.card == c.card => Some(k),
+        _ => None,
+    })?;
     let conn = match c.connector_id {
         Some(id) => card.connectors.iter().find(|k| k.id == id),
         None => {
@@ -468,10 +648,10 @@ pub(crate) fn endpoints(
                     };
                     ep.sink = crate::sink::sink_record(blob, src, now, &scope.fields, quirks);
                 }
-                (Some(Err(e)), _) => {
+                (Some(Err((reason, e))), _) => {
                     edid_trouble = true;
                     layer.availability = Availability::Unknown {
-                        reason: UnknownReason::NotGranted,
+                        reason: *reason,
                         detail: Some(format!("{}: {e}", c.edid_path())),
                     };
                 }
@@ -618,11 +798,19 @@ pub(crate) fn endpoints(
                         ))),
                     }
                 }
-                (KmsRead::Cards(_), None) => LayerCapabilities {
+                (KmsRead::Cards(cards), None) => LayerCapabilities {
                     layer: LayerKind::Kms,
-                    availability: Availability::Unknown {
-                        reason: UnknownReason::NotExposed,
-                        detail: Some("no KMS connector matches this sysfs connector".into()),
+                    availability: match cards.iter().find(|r| r.card() == c.card) {
+                        Some(CardResult::Skipped(_, r, d) | CardResult::Failed(_, r, d)) => {
+                            Availability::Unknown {
+                                reason: *r,
+                                detail: Some(d.clone()),
+                            }
+                        }
+                        _ => Availability::Unknown {
+                            reason: UnknownReason::NotExposed,
+                            detail: Some("no KMS connector matches this sysfs connector".into()),
+                        },
                     },
                     caps: CapabilitySet::default(),
                     detail: None,
@@ -694,7 +882,89 @@ fn kms_availability(kms: &KmsRead) -> Availability {
             reason: *r,
             detail: Some(d.clone()),
         },
-        KmsRead::Cards(c) if c.iter().any(Result::is_err) => Availability::Partial,
-        KmsRead::Cards(_) => Availability::Read,
+        KmsRead::Cards(c) => {
+            let read = c
+                .iter()
+                .filter(|r| matches!(r, CardResult::Read(_)))
+                .count();
+            match c.iter().find(|r| !matches!(r, CardResult::Read(_))) {
+                None => Availability::Read,
+                Some(_) if read > 0 => Availability::Partial,
+                Some(CardResult::Skipped(_, r, d) | CardResult::Failed(_, r, d)) => {
+                    Availability::Unknown {
+                        reason: *r,
+                        detail: Some(d.clone()),
+                    }
+                }
+                Some(CardResult::Read(_)) => Availability::Read,
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::TempFixture;
+
+    fn lab() -> SystemRoot {
+        SystemRoot::fixture(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/lab-gnome"
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn seat0_session_type() {
+        let f = TempFixture::new("ID=debian\n");
+        let root = || SystemRoot::fixture(f.path()).unwrap();
+        assert_eq!(seat0_graphical(&root()), None, "no logind state: unknown");
+        let run = f.path().join("root/run/systemd");
+        std::fs::create_dir_all(run.join("seats")).unwrap();
+        std::fs::create_dir_all(run.join("sessions")).unwrap();
+        std::fs::write(run.join("seats/seat0"), "IS_SEAT0=1\nACTIVE=3\n").unwrap();
+        std::fs::write(run.join("sessions/3"), "TYPE=wayland\nSTATE=active\n").unwrap();
+        assert_eq!(seat0_graphical(&root()), Some(true));
+        std::fs::write(run.join("sessions/3"), "TYPE=tty\nSTATE=active\n").unwrap();
+        assert_eq!(
+            seat0_graphical(&root()),
+            Some(false),
+            "switched to a text console"
+        );
+        std::fs::write(run.join("seats/seat0"), "IS_SEAT0=1\nACTIVE=\n").unwrap();
+        assert_eq!(seat0_graphical(&root()), Some(false));
+        std::fs::write(run.join("seats/seat0"), "ACTIVE=../../etc/x\n").unwrap();
+        assert_eq!(seat0_graphical(&root()), Some(false));
+    }
+
+    #[test]
+    fn plan_follows_scope_and_skips_idle_cards() {
+        let all = ProbeScope::everything();
+        let (plans, skipped) = kms_plan(&lab(), &all, true).unwrap();
+        assert!(skipped.is_empty());
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].connectors, Some(vec![37]));
+        assert!(plans[0].hdr);
+        assert!(plans[0].edid_for.is_empty(), "the sysfs EDID is readable");
+        // Out-of-scope endpoints: the card isn't planned at all.
+        let ext = ProbeScope::nothing()
+            .with_class(displaycaps_model::EndpointClass::External)
+            .with_layer(LayerKind::Kms);
+        assert_eq!(kms_plan(&lab(), &ext, true).unwrap().0.len(), 0);
+        // A card that drives no output is never opened on the live system.
+        let f = TempFixture::new("ID=debian\n");
+        let c = f.path().join("root/sys/class/drm/card0-HDMI-A-1");
+        std::fs::create_dir_all(f.path().join("root/sys/class/drm/card0")).unwrap();
+        std::fs::create_dir_all(&c).unwrap();
+        std::fs::write(c.join("status"), "connected\n").unwrap();
+        std::fs::write(c.join("enabled"), "disabled\n").unwrap();
+        std::fs::write(c.join("connector_id"), "98\n").unwrap();
+        let root = SystemRoot::fixture(f.path()).unwrap();
+        let (plans, skipped) = kms_plan(&root, &all, true).unwrap();
+        assert!(plans.is_empty());
+        assert!(
+            matches!(&skipped[0], CardResult::Skipped(c, UnknownReason::NotExposed, _) if c == "card0")
+        );
     }
 }

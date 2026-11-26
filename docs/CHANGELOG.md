@@ -37,8 +37,8 @@ All notable changes to this project are documented here. The format follows
 - Read-only KMS layer: active mode, the cached mode list, `max bpc`,
   `Colorspace`, `color format`, `HDR_OUTPUT_METADATA`, `Broadcast RGB`,
   `vrr_capable`, `VRR_ENABLED`, `content type`, `link-status` and panel
-  orientation. Read only inside a display session (never as DRM master);
+  orientation. Read only where a compositor holds DRM master (never as master);
   fixtures replay captured `drm_info -j` output.
-- Watch events for DRM hotplug (kernel uevents) and KMS changes (mode, HDR,
-  VRR), with `ProbeOptions::kms_poll_interval`.
+- Watch events for DRM hotplug (kernel uevents) and, opt-in, KMS changes
+  (mode, HDR, VRR) with `ProbeOptions::kms_poll_interval`.
 - `displaycaps watch` and `displaycaps kms-facts` (lab tooling).

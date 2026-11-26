@@ -39,10 +39,10 @@ USAGE:
       Probe a fixture with the full scope and print the snapshot as JSON.
   displaycaps schema
       Print the JSON schema of the snapshot (v1).
-  displaycaps watch [--layer NAME]... [--events N] [--seconds S]
+  displaycaps watch [--layer NAME]... [--events N] [--seconds S] [--kms-poll MS]
       Watch the live system (default: every layer) and print one JSON line per change: its
       causes (hotplug, kms_change, ...), the re-probe latency and the diff. Stops after N events
-      (default 1) or S seconds (default 60).
+      (default 1) or S seconds (default 60). --kms-poll turns on the KMS change poll.
   displaycaps kms-facts [--drm-info FILE]
       Print KMS state as normalized fact lines, read with this library's read-only ioctls (only
       inside a display session), or from a `drm_info -j` file. Lab tooling for the KMS gate.
@@ -241,6 +241,7 @@ fn cmd_watch(args: &[String]) -> Result<(), String> {
     let mut scope = ProbeScope::everything();
     let mut layers: Vec<LayerKind> = vec![];
     let (mut events, mut seconds) = (1u32, 60u64);
+    let mut opts = ProbeOptions::default();
     let mut it = args.iter();
     let num = |v: Option<&String>, what: &str| {
         v.and_then(|n| n.parse::<u64>().ok())
@@ -258,6 +259,12 @@ fn cmd_watch(args: &[String]) -> Result<(), String> {
             }
             "--events" => events = u32::try_from(num(it.next(), "--events")?).unwrap_or(u32::MAX),
             "--seconds" => seconds = num(it.next(), "--seconds")?,
+            "--kms-poll" => {
+                opts = opts.with_kms_poll(Some(std::time::Duration::from_millis(num(
+                    it.next(),
+                    "--kms-poll",
+                )?)))
+            }
             other => return Err(format!("unknown option {other}")),
         }
     }
@@ -265,9 +272,7 @@ fn cmd_watch(args: &[String]) -> Result<(), String> {
         scope.layers = Selection::Only(layers);
     }
     let rt = Runtime::new(SystemRoot::Live).map_err(|e| e.to_string())?;
-    let w = rt
-        .watch(&scope, &ProbeOptions::default())
-        .map_err(|e| e.to_string())?;
+    let w = rt.watch(&scope, &opts).map_err(|e| e.to_string())?;
     let end = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
     // The first event is the initial snapshot.
     let first = w

@@ -62,15 +62,18 @@ impl Task<Results> for SysfsTask<'_> {
 
     fn finish(self: Box<Self>, out: &mut Results, timed_out: bool) {
         out.sysfs_timed_out = timed_out;
-        out.sysfs = self.out;
+        // A late result is dropped: the layers report the timeout, not data past its deadline.
+        out.sysfs = if timed_out { None } else { self.out };
     }
 }
 
-/// The KMS backend: one step reads every card (read-only ioctls, or the fixture's drm_info).
+/// The KMS backend: the first step plans from sysfs which cards to open (and what to read on
+/// each); every further step reads one card.
 struct KmsTask<'a> {
     root: &'a SystemRoot,
-    access: Option<drm::KmsAccess>,
-    blobs: Vec<&'static str>,
+    scope: &'a ProbeScope,
+    access: drm::KmsAccess,
+    plans: Option<Vec<drm::CardPlan>>,
     out: Option<KmsRead>,
 }
 
@@ -80,15 +83,38 @@ impl Task<Results> for KmsTask<'_> {
     }
 
     fn step(&mut self) -> bool {
-        if let Some(a) = self.access.take() {
-            self.out = Some(drm::read_kms(self.root, a, &self.blobs));
+        if let drm::KmsAccess::No(r, d) = &self.access {
+            self.out = Some(KmsRead::Unreadable(*r, d.clone()));
+            return true;
         }
-        true
+        let Some(plans) = &mut self.plans else {
+            let live = matches!(self.access, drm::KmsAccess::Live);
+            match drm::kms_plan(self.root, self.scope, live) {
+                Ok((plans, skipped)) => {
+                    self.out = Some(KmsRead::Cards(skipped));
+                    self.plans = Some(plans);
+                    return false;
+                }
+                Err((r, d)) => {
+                    self.out = Some(KmsRead::Unreadable(r, d));
+                    return true;
+                }
+            }
+        };
+        let Some(plan) = plans.pop() else {
+            return true;
+        };
+        let res = drm::read_planned(self.root, &self.access, &plan);
+        if let Some(KmsRead::Cards(v)) = &mut self.out {
+            v.push(res);
+        }
+        plans.is_empty()
     }
 
     fn finish(self: Box<Self>, out: &mut Results, timed_out: bool) {
         out.kms_timed_out = timed_out;
-        out.kms = self.out;
+        // A late result is dropped: the layer reports the timeout, not data past its deadline.
+        out.kms = if timed_out { None } else { self.out };
     }
 }
 
@@ -137,18 +163,11 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
         }));
     }
     if scope.layers.includes(&LayerKind::Kms) {
-        let mut blobs = vec![];
-        if scope.fields.includes(&displaycaps_model::FieldGroup::Hdr) {
-            blobs.push("HDR_OUTPUT_METADATA");
-        }
-        if scope.layers.includes(&LayerKind::SinkChain) {
-            // Only used when the sysfs EDID can't be read.
-            blobs.push("EDID");
-        }
         tasks.push(Box::new(KmsTask {
             root,
-            access: Some(drm::kms_access(root, &env)),
-            blobs,
+            scope,
+            access: drm::kms_access(root, &env),
+            plans: None,
             out: None,
         }));
     }

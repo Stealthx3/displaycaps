@@ -98,9 +98,6 @@ pub(crate) struct KmsProp {
     pub hdr: Option<Option<HdrMetadata>>,
 }
 
-/// Properties whose blobs are read: everything else is a scalar or an enum.
-pub(crate) const BLOBS_READ: [&str; 2] = ["EDID", "HDR_OUTPUT_METADATA"];
-
 const FLAG_PHSYNC: u32 = 1;
 const FLAG_NHSYNC: u32 = 2;
 const FLAG_PVSYNC: u32 = 4;

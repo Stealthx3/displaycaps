@@ -36,10 +36,10 @@ Open items (not phase tasks):
 
 ## Phase 3 — sysfs and KMS backend (about 3 weeks)
 
-- [ ] **3.1** sysfs DRM reader: connectors, status, cached EDID
-- [ ] **3.2** Read-only KMS: active mode, max bpc, Colorspace, color format, HDR metadata, Broadcast RGB, VRR, link status
-- [ ] **3.3** Hotplug and mode-change events
-- [ ] **3.4** Gate: matches drm_info; strace shows no modeset, DRM master or forced probe
+- [x] **3.1** sysfs DRM reader: connectors, status, cached EDID
+- [x] **3.2** Read-only KMS: active mode, max bpc, Colorspace, color format, HDR metadata, Broadcast RGB, VRR, link status
+- [x] **3.3** Hotplug and mode-change events
+- [x] **3.4** Gate: matches drm_info; strace shows no modeset, DRM master or forced probe
 
 ## Phase 4 — Link budget engine (about 2 weeks)
 

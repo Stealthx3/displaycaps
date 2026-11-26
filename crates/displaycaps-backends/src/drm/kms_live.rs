@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Live KMS reads through the `drm` crate: read-only ioctls only.
+//! Live KMS reads: read-only ioctls only, through `drm-ffi` and the `drm` crate.
 //!
-//! - Connectors are read with `GETCONNECTOR` and a one-mode stub (the `drm` crate's
-//!   `force_probe = false`, the same request as libdrm's `drmModeGetConnectorCurrent`): the
-//!   kernel returns its cached state and never probes the connector.
+//! - Connectors are read with `GETCONNECTOR` and a mode buffer of at least one entry on every
+//!   call, so `count_modes` is never 0: the kernel returns its cached state and never probes the
+//!   connector (libdrm's `drmModeGetConnectorCurrent`). The `drm` crate's own `get_connector`
+//!   isn't used: its retry loop sends `count_modes = 0` for a connector with no cached modes.
 //! - Nothing is set: no mode, no property, no master. The only per-file change is the client
 //!   capabilities (universal planes, atomic, aspect ratio), which make atomic-only properties and
 //!   the modes' picture aspect ratio visible to this file descriptor and affect nothing else.
 //!   Stereo 3D and writeback connectors are left off: neither is a display the library reports.
-//! - The primary node is opened only inside a display session, where the compositor is DRM master
-//!   already. Outside one the kernel would make this process master implicitly, so the caller
-//!   doesn't open it at all (see `drm::kms_readable`).
+//! - Only the connectors the plan names are read, with the CRTCs that drive them. Which cards may
+//!   be opened at all is decided before (see `drm::kms_access` and `drm::kms_plan`).
 
 use std::fs::{File, OpenOptions};
 use std::io;
@@ -18,8 +18,10 @@ use std::os::fd::{AsFd, BorrowedFd};
 
 use drm::control::{Device as ControlDevice, ResourceHandle, property};
 use drm::{ClientCapability, Device};
+use drm_ffi::drm_mode_modeinfo;
 
-use super::kms::{BLOBS_READ, KmsCard, KmsConnector, KmsCrtc, KmsFrom, KmsMode, KmsProp};
+use super::CardPlan;
+use super::kms::{KmsCard, KmsConnector, KmsCrtc, KmsFrom, KmsMode, KmsProp};
 
 /// An open primary node.
 struct Card(File);
@@ -33,12 +35,41 @@ impl AsFd for Card {
 impl Device for Card {}
 impl ControlDevice for Card {}
 
-/// Reads one card (`/dev/dri/cardN`). `blobs` names the blob properties whose bytes are read
-/// (EDID only when the sink is in scope; HDR metadata only when HDR is).
-pub(crate) fn read_card(name: &str, blobs: &[&str]) -> io::Result<KmsCard> {
+/// Upper bound of the GETCONNECTOR retry loop (the mode list changing between calls).
+const TRIES: usize = 4;
+
+type ConnectorInfo = (drm_ffi::drm_mode_get_connector, Vec<drm_mode_modeinfo>);
+
+/// `GETCONNECTOR` that never probes: `count_modes` is at least 1 on every call.
+fn connector(card: &Card, id: u32) -> io::Result<ConnectorInfo> {
+    let mut want = 1usize;
+    for _ in 0..TRIES {
+        // drm-ffi sends each buffer's capacity as its count (after reserving the counts of its
+        // own sizing call), so the mode count it sends is never below this capacity, never 0.
+        let mut modes: Vec<drm_mode_modeinfo> = Vec::with_capacity(want.max(1));
+        let mut encoders: Vec<u32> = Vec::with_capacity(8);
+        let info = drm_ffi::mode::get_connector(
+            card.as_fd(),
+            id,
+            None,
+            None,
+            Some(&mut modes),
+            Some(&mut encoders),
+            false,
+        )?;
+        if info.count_modes as usize == modes.len() {
+            return Ok((info, modes));
+        }
+        want = info.count_modes as usize;
+    }
+    Err(io::Error::other("mode list kept changing"))
+}
+
+/// Reads the plan's connectors on one card (`/dev/dri/cardN`).
+pub(crate) fn read_card(plan: &CardPlan) -> io::Result<KmsCard> {
     let file = OpenOptions::new()
         .read(true)
-        .open(format!("/dev/dri/{name}"))?;
+        .open(format!("/dev/dri/{}", plan.card))?;
     let card = Card(file);
     // Visibility only; failures leave the legacy property set, which is still read.
     let _ = card.set_client_capability(ClientCapability::UniversalPlanes, true);
@@ -50,35 +81,56 @@ pub(crate) fn read_card(name: &str, blobs: &[&str]) -> io::Result<KmsCard> {
         .unwrap_or_default();
     let res = card.resource_handles()?;
     let mut connectors = vec![];
+    let mut crtc_ids = vec![];
     for &h in res.connectors() {
-        let Ok(info) = card.get_connector(h, false) else {
+        let id = u32::from(h);
+        if plan
+            .connectors
+            .as_ref()
+            .is_some_and(|ids| !ids.contains(&id))
+        {
+            continue;
+        }
+        let Ok((info, modes)) = connector(&card, id) else {
             continue;
         };
-        let crtc = info
-            .current_encoder()
+        let crtc = drm::control::from_u32::<drm::control::encoder::Handle>(info.encoder_id)
             .and_then(|e| card.get_encoder(e).ok())
             .and_then(|e| e.crtc())
             .map(u32::from);
+        if let Some(c) = crtc {
+            crtc_ids.push(c);
+        }
+        let mut blobs = vec![];
+        if plan.hdr {
+            blobs.push("HDR_OUTPUT_METADATA");
+        }
+        if plan.edid_for.contains(&id) {
+            blobs.push("EDID");
+        }
         connectors.push(KmsConnector {
-            id: u32::from(h),
-            type_code: u32::from(info.interface()),
-            status: u32::from(info.state()),
+            id,
+            type_code: info.connector_type,
+            status: info.connection,
             crtc,
-            modes: info.modes().iter().map(mode).collect(),
-            props: props(&card, h, blobs),
+            modes: modes.iter().map(mode).collect(),
+            props: props(&card, h, &blobs),
         });
     }
     let mut crtcs = vec![];
     for &h in res.crtcs() {
+        if !crtc_ids.contains(&u32::from(h)) {
+            continue;
+        }
         let Ok(info) = card.get_crtc(h) else { continue };
         crtcs.push(KmsCrtc {
             id: u32::from(h),
-            mode: info.mode().as_ref().map(mode),
+            mode: info.mode().map(|m| mode(&drm_mode_modeinfo::from(m))),
             props: props(&card, h, &[]),
         });
     }
     Ok(KmsCard {
-        card: name.to_string(),
+        card: plan.card.clone(),
         driver,
         connectors,
         crtcs,
@@ -86,10 +138,9 @@ pub(crate) fn read_card(name: &str, blobs: &[&str]) -> io::Result<KmsCard> {
     })
 }
 
-fn mode(m: &drm::control::Mode) -> KmsMode {
+fn mode(r: &drm_mode_modeinfo) -> KmsMode {
     // The raw struct: the `drm` crate's flag types drop bits they don't name (picture aspect
     // ratio among them).
-    let r = drm_ffi::drm_mode_modeinfo::from(*m);
     KmsMode {
         clock_khz: r.clock,
         hdisplay: r.hdisplay,
@@ -124,8 +175,7 @@ fn props<T: ResourceHandle>(card: &Card, h: T, blobs: &[&str]) -> Vec<KmsProp> {
         };
         let blob = (matches!(info.value_type(), property::ValueType::Blob)
             && raw != 0
-            && blobs.contains(&name.as_str())
-            && BLOBS_READ.contains(&name.as_str()))
+            && blobs.contains(&name.as_str()))
         .then(|| card.get_property_blob(raw).ok())
         .flatten();
         out.push(KmsProp {

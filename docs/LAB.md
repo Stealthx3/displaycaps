@@ -34,7 +34,8 @@ _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 - Binary: build in main (`cargo build --release -p displaycaps-cli`), `scripts/lab.sh pull /home/lab/src/target/release/displaycaps dist`, shut main down, start desktop, and copy `dist/displaycaps` into the guest's `/home/lab/src/dist/` (rsync over the lab key; `dist/` is git-ignored, so `lab.sh push` skips it).
 - `scripts/kms-diff.sh <label>` inside a session: our ioctl read vs `drm_info -j`, through the same normalization.
 - Hotplug: a sysfs `status` write sends no uevent; unbinding and rebinding the GPU's PCI driver in the guest (root, lab only) does (`remove`/`add` on the DRM devices). `vkms` isn't in the Debian 13 kernel.
-- Mode change: `swaymsg output Virtual-1 mode …` inside the Sway session while `displaycaps watch --layer kms` runs.
+- Mode change: `swaymsg output Virtual-1 mode …` inside the Sway session while `displaycaps watch --layer kms --kms-poll 500` runs (the poll is opt-in).
+- The desktop guest's virtio GPU has two heads (2026-11-26); the second stays disconnected with no cached modes, so check-passive covers the GETCONNECTOR path that would otherwise send `count_modes = 0`.
 
 ## Commands
 - Build: `scripts/lab.sh run 'cargo build --workspace'`
@@ -48,6 +49,6 @@ _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 
 ## Log
 - 2026-11-21 — doctor OK; Debian 13 base present. lab-displaycaps-main created and provisioned (Rust 1.99.1, cargo-deny 0.22.0, cargo-fuzz 0.13.2).
-- 2026-11-26 — Phase 3 gate runs in lab-displaycaps-desktop: kms-diff identical on GNOME, Plasma and Sway (39 facts each); check-passive ok for `probe` and `watch` in each session and for `probe` outside a session (0 primary-node opens); hotplug via PCI unbind/bind and Sway mode changes reported by `displaycaps watch`. After the unbind test the card came back as `card1`; a reboot restores `card0`.
+- 2026-11-26 — Phase 3 gate (after review fixes, two heads): kms-diff identical on GNOME, Plasma and Sway (46 facts each); check-passive ok for `probe` and `watch --kms-poll` in each session; seat-rule control: with seat0 switched to a text VT (VT_ACTIVATE ioctl as root; `chvt` isn't installed) and the session variables still set, `probe` opens no card and reports `no_session`. First run (one head): check-passive ok for `probe` and `watch` in each session and for `probe` outside a session (0 primary-node opens); hotplug via PCI unbind/bind and Sway mode changes reported by `displaycaps watch`. After the unbind test the card came back as `card1`; a reboot restores `card0`.
 - 2026-11-21 — `scripts/lab.sh` is the master v1.2 copy; AudioCaps' local `put` command is not carried over (copy files with `lab.sh run` + the repo instead).
 - 2026-11-21 — All lab guests' disks (main, desktop and their snapshots) and the base volume moved to pool VMDisks by the maintainer's request (done from another project's session); LAB_POOL=VMDisks.

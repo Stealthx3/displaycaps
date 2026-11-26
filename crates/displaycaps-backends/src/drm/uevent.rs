@@ -33,6 +33,8 @@ pub(crate) struct Listener(OwnedFd);
 impl Listener {
     /// Opens and binds the socket; `poll` is the longest a [`Listener::next`] call blocks.
     pub fn open(poll: Duration) -> io::Result<Self> {
+        // A zero receive timeout means "block forever" to the kernel.
+        let poll = poll.max(Duration::from_millis(1));
         let fd = socket(
             AddressFamily::Netlink,
             SockType::Datagram,

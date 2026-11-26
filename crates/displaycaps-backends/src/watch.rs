@@ -73,6 +73,7 @@ pub struct Watch {
     trigger: mpsc::Sender<Cause>,
     stop: Arc<AtomicBool>,
     handle: Option<thread::JoinHandle<()>>,
+    sources: Vec<thread::JoinHandle<()>>,
 }
 
 impl Watch {
@@ -85,9 +86,11 @@ impl Watch {
         let (tx, rx) = mpsc::channel();
         let (trigger, trigger_rx) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
-        if matches!(root, SystemRoot::Live) {
-            sources::start(&scope, &opts, trigger.clone(), stop.clone());
-        }
+        let sources = if matches!(root, SystemRoot::Live) {
+            sources::start(&scope, &opts, trigger.clone(), stop.clone())
+        } else {
+            vec![]
+        };
         let s = stop.clone();
         let handle = thread::Builder::new()
             .name("displaycaps-watch".into())
@@ -97,6 +100,7 @@ impl Watch {
             trigger,
             stop,
             handle: Some(handle),
+            sources,
         })
     }
 
@@ -130,6 +134,10 @@ impl Drop for Watch {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
         if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+        // Each source looks at the stop flag at least every 100 ms (or after one KMS read).
+        for h in self.sources.drain(..) {
             let _ = h.join();
         }
     }
@@ -240,46 +248,54 @@ mod sources {
         opts: &ProbeOptions,
         tx: Sender<Cause>,
         stop: Arc<AtomicBool>,
-    ) {
+    ) -> Vec<thread::JoinHandle<()>> {
+        let mut handles = vec![];
         if drm::in_scope(scope)
             && let Ok(listener) = drm::uevent::Listener::open(POLL)
         {
             let (tx, stop) = (tx.clone(), stop.clone());
-            let _ = thread::Builder::new()
+            if let Ok(h) = thread::Builder::new()
                 .name("displaycaps-uevent".into())
                 .spawn(move || {
                     while !stop.load(Ordering::SeqCst) {
-                        match listener.next() {
-                            Ok(Some(ev)) if ev.hotplug || ev.action != "change" => {
-                                if tx.send(Cause::Hotplug).is_err() {
-                                    return;
-                                }
-                            }
-                            Ok(_) => {}
+                        let hotplug = match listener.next() {
+                            Ok(Some(ev)) => ev.hotplug || ev.action != "change",
+                            Ok(None) => false,
+                            // The socket overran (a burst of events): some were lost, so re-probe.
+                            Err(e) if e.raw_os_error() == Some(nix::libc::ENOBUFS) => true,
                             Err(_) => return,
+                        };
+                        if hotplug && tx.send(Cause::Hotplug).is_err() {
+                            return;
                         }
                     }
-                });
+                })
+            {
+                handles.push(h);
+            }
         }
-        let env = Env::for_probe(&SystemRoot::Live, opts);
-        if let (true, Some(every), drm::KmsAccess::Live) = (
+        // The KMS change poll is opt-in: `kms_poll_interval` is `None` unless the app sets it.
+        if let (true, Some(every)) = (
             scope.layers.includes(&LayerKind::Kms),
             opts.kms_poll_interval,
-            drm::kms_access(&SystemRoot::Live, &env),
         ) {
-            let _ = thread::Builder::new()
+            let env = Env::for_probe(&SystemRoot::Live, opts);
+            let scope = scope.clone();
+            let every = every.max(POLL);
+            if let Ok(h) = thread::Builder::new()
                 .name("displaycaps-kms-poll".into())
                 .spawn(move || {
-                    let mut last = drm::kms_signature();
+                    // Each read re-checks the session and which cards drive an output.
+                    let mut last = drm::kms_signature(&scope, &env);
                     let mut waited = Duration::ZERO;
                     while !stop.load(Ordering::SeqCst) {
-                        thread::sleep(POLL.min(every));
-                        waited += POLL.min(every);
+                        thread::sleep(POLL);
+                        waited += POLL;
                         if waited < every {
                             continue;
                         }
                         waited = Duration::ZERO;
-                        let now = drm::kms_signature();
+                        let now = drm::kms_signature(&scope, &env);
                         if now != last {
                             last = now;
                             if tx.send(Cause::KmsChange).is_err() {
@@ -287,8 +303,12 @@ mod sources {
                             }
                         }
                     }
-                });
+                })
+            {
+                handles.push(h);
+            }
         }
+        handles
     }
 }
 
