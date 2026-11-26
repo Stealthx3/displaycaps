@@ -40,9 +40,15 @@ const WLR_MANAGER: u32 = 4;
 const KDE_DEVICE: u32 = 11;
 
 /// Reads the compositor at `socket`. With `outputs` false only the registry is listed.
-pub(crate) fn read(socket: &str, outputs: bool, budget: Duration) -> Read<WaylandFacts> {
+/// With `images` false, no output image description is read.
+pub(crate) fn read(
+    socket: &str,
+    outputs: bool,
+    images: bool,
+    budget: Duration,
+) -> Read<WaylandFacts> {
     let deadline = Instant::now() + budget;
-    match connect(socket).and_then(|conn| session(&conn, outputs, deadline)) {
+    match connect(socket).and_then(|conn| session(&conn, outputs, images, deadline)) {
         Ok(f) => Read::Ok(f),
         Err((r, d)) => Read::err(r, d),
     }
@@ -131,7 +137,12 @@ fn bind(
     })
 }
 
-fn session(conn: &Connection, outputs: bool, deadline: Instant) -> Result<WaylandFacts, Fail> {
+fn session(
+    conn: &Connection,
+    outputs: bool,
+    images: bool,
+    deadline: Instant,
+) -> Result<WaylandFacts, Fail> {
     let mut q: EventQueue<State> = conn.new_event_queue();
     let qh = q.handle();
     let mut st = State::default();
@@ -156,7 +167,7 @@ fn session(conn: &Connection, outputs: bool, deadline: Instant) -> Result<Waylan
 
     // Each output's image description: get_output, get_image_description, wait for ready, then
     // get_information. Objects are destroyed once read.
-    if let Some(m) = &manager {
+    if let Some(m) = manager.as_ref().filter(|_| images) {
         let mut pending = vec![];
         for (i, o) in wl_outputs.iter().enumerate() {
             let cmo = m.get_output(o, &qh, i);
@@ -170,6 +181,15 @@ fn session(conn: &Connection, outputs: bool, deadline: Instant) -> Result<Waylan
             }
         }
         roundtrip(conn, &mut q, &mut st, deadline)?;
+        // A description still not ready (or not answered) is unknown, not silently missing.
+        for o in &mut st.outputs {
+            if o.image_description.is_none() {
+                o.image_description = Some(Read::err(
+                    UnknownReason::Timeout,
+                    "the compositor did not finish the output's image description",
+                ));
+            }
+        }
         for (o, d) in pending {
             d.destroy();
             o.destroy();
@@ -405,14 +425,28 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        st.events += 1;
-        if let wl_registry::Event::Global {
-            name,
-            interface,
-            version,
-        } = ev
-        {
-            st.globals.push((name, interface, version));
+        // Only outputs coming or going count as changes (not a new seat or tablet).
+        const OUTPUTS: &[&str] = &["wl_output", "kde_output_device_v2"];
+        match ev {
+            wl_registry::Event::Global {
+                name,
+                interface,
+                version,
+            } => {
+                if OUTPUTS.contains(&interface.as_str()) {
+                    st.events += 1;
+                }
+                st.globals.push((name, interface, version));
+            }
+            wl_registry::Event::GlobalRemove { name }
+                if st
+                    .globals
+                    .iter()
+                    .any(|(n, i, _)| *n == name && OUTPUTS.contains(&i.as_str())) =>
+            {
+                st.events += 1;
+            }
+            _ => {}
         }
     }
 }
@@ -460,7 +494,8 @@ impl Dispatch<wl_output::WlOutput, usize> for State {
                     WEnum::Value(f) => f,
                     WEnum::Unknown(u) => wl_output::Mode::from_bits_truncate(u),
                 };
-                if f.contains(wl_output::Mode::Current) || o.mode.is_none() {
+                // Only the current mode; others (some compositors list them) are not the state.
+                if f.contains(wl_output::Mode::Current) {
                     o.mode = Some(WlMode {
                         width,
                         height,

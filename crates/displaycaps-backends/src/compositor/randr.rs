@@ -11,23 +11,15 @@ use xcb::{Xid, randr, x};
 
 use super::facts::{RandrFacts, RandrMode, RandrOutput, Read, to_hex};
 
-/// Output properties worth reading (others are skipped to keep the read small).
-const PROPERTIES: &[&str] = &[
-    "EDID",
-    "max bpc",
-    "Colorspace",
-    "Broadcast RGB",
-    "vrr_capable",
-    "link-status",
-    "non-desktop",
-    "content type",
-    "TearFree",
-];
+/// Output settings the compositor layer reports (read when its fields are in scope).
+const SETTINGS: &[&str] = &["max bpc", "Colorspace", "Broadcast RGB"];
 
 /// Reads RandR from the X display `display` (e.g. `:0`); with `outputs` false only the server
-/// and RandR versions.
-pub(crate) fn read(display: &str, outputs: bool) -> Read<RandrFacts> {
-    match read_inner(display, outputs) {
+/// and RandR versions. Each output's `EDID` is read to join it to its connector; the settings
+/// properties only with `settings`. libxcb's replies have no deadline: a hung X server holds the
+/// reader thread (never the probe, whose backend deadline still applies).
+pub(crate) fn read(display: &str, outputs: bool, settings: bool) -> Read<RandrFacts> {
+    match read_inner(display, outputs, settings) {
         Ok(f) => Read::Ok(f),
         Err((r, d)) => Read::err(r, d),
     }
@@ -39,7 +31,7 @@ fn e(err: impl std::fmt::Display) -> Fail {
     (UnknownReason::ReadError, err.to_string())
 }
 
-fn read_inner(display: &str, outputs: bool) -> Result<RandrFacts, Fail> {
+fn read_inner(display: &str, outputs: bool, settings: bool) -> Result<RandrFacts, Fail> {
     let (conn, screen) =
         xcb::Connection::connect_with_extensions(Some(display), &[xcb::Extension::RandR], &[])
             .map_err(|err| {
@@ -113,7 +105,7 @@ fn read_inner(display: &str, outputs: bool) -> Result<RandrFacts, Fail> {
             .map_err(e)?;
         for &atom in props.atoms() {
             let name = atom_name(&conn, &mut atom_names, atom)?;
-            if !PROPERTIES.contains(&name.as_str()) {
+            if name != "EDID" && !(settings && SETTINGS.contains(&name.as_str())) {
                 continue;
             }
             let p = conn

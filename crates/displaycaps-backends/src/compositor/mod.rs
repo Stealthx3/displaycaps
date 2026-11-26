@@ -69,6 +69,21 @@ pub(crate) struct LivePlan {
     bus: Option<String>,
     gnome_x11: bool,
     outputs: bool,
+    /// Inside Flatpak (Mutter's name may be hidden by the bus proxy).
+    flatpak: bool,
+    /// Read image descriptions (HDR or compositor fields in scope).
+    images: bool,
+    /// Read RandR's output settings properties (compositor fields in scope).
+    props: bool,
+}
+
+impl LivePlan {
+    /// Reads only what the scope's field groups need.
+    pub(crate) fn limit(&mut self, scope: &ProbeScope) {
+        let f = |g: FieldGroup| scope.fields.includes(&g);
+        self.images = f(FieldGroup::Compositor) || f(FieldGroup::Hdr);
+        self.props = f(FieldGroup::Compositor);
+    }
 }
 
 /// The result: facts, or why there are none.
@@ -109,6 +124,9 @@ pub(crate) fn access(root: &SystemRoot, env: &Env, want: Want) -> Access {
             let mut p = LivePlan {
                 outputs: want == Want::Outputs,
                 bus: env.get("DBUS_SESSION_BUS_ADDRESS"),
+                flatpak: root.exists("/.flatpak-info"),
+                images: true,
+                props: true,
                 ..LivePlan::default()
             };
             match kind {
@@ -159,19 +177,35 @@ pub(crate) fn start_live(plan: LivePlan, budget: Duration) -> mpsc::Receiver<Com
 /// Reads the live sources in order: Wayland, then Mutter when the compositor is Mutter, or RandR
 /// (and Mutter on GNOME) on X11.
 pub(crate) fn read_live(plan: &LivePlan, budget: Duration) -> CompRead {
+    // One deadline for every source, so a slow first source leaves the rest less time rather
+    // than pushing the whole read past the backend's deadline.
+    let deadline = std::time::Instant::now() + budget;
+    let left = || deadline.saturating_duration_since(std::time::Instant::now());
     let mut f = CompositorFacts::default();
+    let mutter = |f: &mut CompositorFacts| {
+        let t = left();
+        f.mutter = Some(if t.is_zero() {
+            Read::err(UnknownReason::Timeout, "no time left for Mutter")
+        } else if plan.outputs {
+            mutter::read(plan.bus.as_deref(), t, plan.flatpak)
+        } else {
+            mutter::present(plan.bus.as_deref(), t, plan.flatpak)
+        });
+    };
     if let Some(sock) = &plan.wayland {
-        let w = wayland::read(sock, plan.outputs, budget);
-        let mutter = w.ok().is_some_and(|w| kind_of(w) == CompositorKind::Mutter);
+        let w = wayland::read(sock, plan.outputs, plan.images, left());
+        let is_mutter = w.ok().is_some_and(|w| kind_of(w) == CompositorKind::Mutter);
         f.wayland = Some(w);
-        if mutter && plan.outputs {
-            f.mutter = Some(mutter::read(plan.bus.as_deref(), budget));
+        // The registry already names Mutter; its state is needed only for output state.
+        if is_mutter && plan.outputs {
+            mutter(&mut f);
         }
     }
     if let Some(d) = &plan.x11 {
-        f.randr = Some(randr::read(d, plan.outputs));
-        if plan.gnome_x11 && plan.outputs {
-            f.mutter = Some(mutter::read(plan.bus.as_deref(), budget));
+        f.randr = Some(randr::read(d, plan.outputs, plan.props));
+        // On X11 only Mutter itself can say it runs, in both scopes alike.
+        if plan.gnome_x11 {
+            mutter(&mut f);
         }
     }
     CompRead::Facts(f)
@@ -285,10 +319,19 @@ pub(crate) fn identity(f: &CompositorFacts) -> Option<(CompositorInfo, Vec<Strin
     if let Some(Read::Ok(r)) = &f.randr {
         protocols.push(format!("RANDR {}.{}", r.version[0], r.version[1]));
         if info.is_none() {
-            info = Some(CompositorInfo {
-                kind: CompositorKind::Xorg,
-                name: r.vendor.clone().unwrap_or_else(|| "X server".into()),
-                version: r.release.map(xorg_version),
+            let xwayland = r.outputs.iter().any(|o| o.name.starts_with("XWAYLAND"));
+            info = Some(if xwayland {
+                CompositorInfo {
+                    kind: CompositorKind::Other,
+                    name: "Xwayland (a Wayland compositor seen through X11)".into(),
+                    version: None,
+                }
+            } else {
+                CompositorInfo {
+                    kind: CompositorKind::Xorg,
+                    name: r.vendor.clone().unwrap_or_else(|| "X server".into()),
+                    version: r.release.map(xorg_version),
+                }
             });
         }
     }
@@ -557,11 +600,16 @@ fn kde_fields(c: &Ctx, d: &KdeDevice) -> (Fields, Option<Value<Vec<Mode>>>) {
     let mut f = Fields::default();
     let caps = d.capabilities.unwrap_or(0);
     f.enabled = d.enabled.map(|e| Value::measured(e, c.wl(I, "enabled")));
+    let on = d.enabled != Some(false);
     f.mode = d
         .current_mode
         .and_then(|i| d.modes.get(i))
+        .filter(|_| on)
         .map(|m| Value::measured(wl_mode(m), c.wl(I, "current_mode")));
-    f.scale = d.scale.map(|s| Value::measured(s as f32, c.wl(I, "scale")));
+    f.scale = d
+        .scale
+        .filter(|_| on)
+        .map(|s| Value::measured(s as f32, c.wl(I, "scale")));
     f.hdr_enabled = d
         .hdr
         .map(|h| Value::measured(h, c.wl(I, "high_dynamic_range")));
@@ -833,6 +881,17 @@ fn randr_views(c: &Ctx, r: &RandrFacts) -> Vec<View> {
             )
         };
         let x11_hdr = "X11 has no HDR output path";
+        // XWayland: the app sees the host Wayland compositor through X11 only (e.g. a Flatpak
+        // with just the X11 socket), so the host's HDR state is out of reach, not off.
+        let xwayland = o.name.starts_with("XWAYLAND");
+        fn xw<T>() -> Value<T> {
+            Value::unknown(
+                UnknownReason::NotGranted,
+                "XWayland output: the host Wayland compositor's HDR state isn't visible over X11 \
+                 (needs the Wayland socket)"
+                    .to_string(),
+            )
+        }
         let f = Fields {
             enabled: Some(Value::measured(
                 o.current.is_some(),
@@ -842,21 +901,37 @@ fn randr_views(c: &Ctx, r: &RandrFacts) -> Vec<View> {
                 .current
                 .as_ref()
                 .map(|m| Value::measured(rm(m, false), c.api("RandR", "GetCrtcInfo"))),
-            hdr_enabled: Some(Value::inferred(false, c.prov(Source::derived(x11_hdr)))),
+            hdr_enabled: Some(if xwayland {
+                xw()
+            } else {
+                Value::inferred(false, c.prov(Source::derived(x11_hdr)))
+            }),
             wide_color: prop("Colorspace")
                 .map(|s| Value::inferred(s.contains("BT2020"), pp("Colorspace"))),
-            rgb_range: prop("Broadcast RGB")
-                .map(|s| Value::measured(s.clone(), pp("Broadcast RGB"))),
+            // Named like KWin's setting: automatic, full or limited.
+            rgb_range: prop("Broadcast RGB").map(|s| {
+                let l = s.to_ascii_lowercase();
+                let n = ["automatic", "full", "limited"]
+                    .into_iter()
+                    .find(|n| l.starts_with(n))
+                    .map(str::to_string)
+                    .unwrap_or(l);
+                Value::measured(n, pp("Broadcast RGB"))
+            }),
             max_bpc: prop("max bpc")
                 .and_then(|s| s.split(',').next()?.trim().parse::<u8>().ok())
                 .map(|b| Value::measured(b, pp("max bpc"))),
-            hdr: Some(Value::inferred(
-                HdrCapabilities {
-                    eotfs: vec![Eotf::TraditionalSdr],
-                    ..HdrCapabilities::default()
-                },
-                c.prov(Source::derived(x11_hdr)),
-            )),
+            hdr: Some(if xwayland {
+                xw()
+            } else {
+                Value::inferred(
+                    HdrCapabilities {
+                        eotfs: vec![Eotf::TraditionalSdr],
+                        ..HdrCapabilities::default()
+                    },
+                    c.prov(Source::derived(x11_hdr)),
+                )
+            }),
             ..Fields::default()
         };
         let modes = (!o.modes.is_empty()).then(|| {
@@ -993,14 +1068,21 @@ fn connector_of(id: &EndpointId) -> &str {
     }
 }
 
-/// Whether an EDID names the same product as an endpoint's sink.
-fn same_sink(edid: &[u8], e: &Endpoint) -> Option<bool> {
-    let id = &e.sink.as_ref()?.identity;
-    if edid.len() < 12 {
-        return None;
+/// Manufacturer, product code and serial number bytes (EDID bytes 8–15).
+fn edid_id(edid: &[u8]) -> Option<&[u8]> {
+    edid.get(8..16)
+}
+
+/// Whether an output's EDID names the same sink as an endpoint: against the endpoint's own EDID
+/// (read for the join even when the sink isn't reported), else its sink record.
+fn same_sink(edid: &[u8], e: &Endpoint, edids: &BTreeMap<String, Vec<u8>>) -> Option<bool> {
+    let ours = edid_id(edid)?;
+    if let Some(theirs) = edids.get(&e.id.0).and_then(|b| edid_id(b)) {
+        return Some(ours == theirs);
     }
-    let product = u16::from_le_bytes([edid[10], edid[11]]);
-    let m = u16::from_be_bytes([edid[8], edid[9]]);
+    let id = &e.sink.as_ref()?.identity;
+    let product = u16::from_le_bytes([ours[2], ours[3]]);
+    let m = u16::from_be_bytes([ours[0], ours[1]]);
     let pnp: String = [(m >> 10) & 31, (m >> 5) & 31, m & 31]
         .iter()
         .map(|c| char::from(b'@' + *c as u8))
@@ -1011,42 +1093,58 @@ fn same_sink(edid: &[u8], e: &Endpoint) -> Option<bool> {
     )
 }
 
-/// The endpoint a view belongs to: by connector name, with sink identity to settle ties or to
-/// find a renamed connector (amdgpu's X driver numbers from 0). Exact names are `measured`.
-fn match_view(v: &View, eps: &[Endpoint]) -> Option<(usize, Confidence)> {
+/// The endpoint a view belongs to: by connector name, checked against the sink's identity when
+/// both sides have one (amdgpu's and nvidia's X drivers number from 0, so a matching name can be
+/// another port), with identity alone to settle ties or find a renamed connector. An exact name
+/// with nothing contradicting it is `measured`.
+fn match_view(
+    v: &View,
+    eps: &[Endpoint],
+    edids: &BTreeMap<String, Vec<u8>>,
+) -> Option<(usize, Confidence)> {
     let want = drm_style(&v.name);
     let by_name: Vec<usize> = (0..eps.len())
         .filter(|&i| connector_of(&eps[i].id) == want)
         .collect();
-    let identity = |i: &usize| -> bool {
-        let e = &eps[*i];
+    let identity = |i: usize| -> Option<bool> {
+        let e = &eps[i];
         if let Some(edid) = &v.edid
-            && let Some(same) = same_sink(edid, e)
+            && let Some(same) = same_sink(edid, e, edids)
         {
-            return same;
+            return Some(same);
         }
         let model = e.sink.as_ref().and_then(|s| s.identity.model_name.known());
-        matches!((model, &v.model), (Some(a), Some(b)) if a == b)
-    };
-    match by_name.len() {
-        0 => None,
-        1 => Some((
-            by_name[0],
-            if connector_of(&eps[by_name[0]].id) == v.name {
-                Confidence::Measured
-            } else {
-                Confidence::Inferred
-            },
-        )),
-        _ => {
-            let hits: Vec<_> = by_name.iter().filter(|i| identity(i)).collect();
-            (hits.len() == 1).then(|| (*hits[0], Confidence::Inferred))
+        match (model, &v.model) {
+            (Some(a), Some(b)) => Some(a == b),
+            _ => None,
         }
-    }
-    .or_else(|| {
+    };
+    let named = match by_name.len() {
+        0 => None,
+        1 => match identity(by_name[0]) {
+            Some(false) => None,
+            same => Some((
+                by_name[0],
+                if connector_of(&eps[by_name[0]].id) == v.name && same != Some(false) {
+                    Confidence::Measured
+                } else {
+                    Confidence::Inferred
+                },
+            )),
+        },
+        _ => {
+            let hits: Vec<_> = by_name
+                .iter()
+                .copied()
+                .filter(|&i| identity(i) == Some(true))
+                .collect();
+            (hits.len() == 1).then(|| (hits[0], Confidence::Inferred))
+        }
+    };
+    named.or_else(|| {
         let hits: Vec<usize> = (0..eps.len())
             .filter(|i| eps[*i].status.known() == Some(&ConnectionStatus::Connected))
-            .filter(identity)
+            .filter(|&i| identity(i) == Some(true))
             .collect();
         (hits.len() == 1).then(|| (hits[0], Confidence::Inferred))
     })
@@ -1072,6 +1170,7 @@ fn class_of(name: &str) -> (EndpointClass, ConnectorType) {
         || n.starts_with("headless")
         || n.starts_with("wl-")
         || n.starts_with("x11-")
+        || n.starts_with("xwayland")
     {
         (EndpointClass::Virtual, ConnectorType::Virtual)
     } else {
@@ -1083,6 +1182,7 @@ fn class_of(name: &str) -> (EndpointClass, ConnectorType) {
 /// that match no DRM connector. Returns the system-wide availability.
 pub(crate) fn attach(
     eps: &mut Vec<Endpoint>,
+    edids: &BTreeMap<String, Vec<u8>>,
     read: &CompRead,
     scope: &ProbeScope,
     now: u64,
@@ -1113,8 +1213,11 @@ pub(crate) fn attach(
     let mut done = vec![false; eps.len()];
     let n = eps.len();
     for v in views(facts, now) {
-        let idx = match match_view(&v, &eps[..n]) {
-            Some((i, conf)) if !done[i] => {
+        let idx = match match_view(&v, &eps[..n], edids) {
+            // Two outputs for one connector (a renamed output found by identity, say): the
+            // first keeps it; the other is not reported rather than as a second endpoint.
+            Some((i, _)) if done[i] => continue,
+            Some((i, conf)) => {
                 done[i] = true;
                 if scope.fields.includes(&FieldGroup::Identity) {
                     for id in &v.ids {
@@ -1272,9 +1375,17 @@ pub(crate) fn fuzz(data: &[u8]) {
     .collect();
     let mut f2 = f.clone();
     f2.redact();
-    let _ = attach(&mut eps, &CompRead::Facts(f), &ProbeScope::everything(), 0);
+    let none = BTreeMap::new();
+    let _ = attach(
+        &mut eps,
+        &none,
+        &CompRead::Facts(f),
+        &ProbeScope::everything(),
+        0,
+    );
     let _ = attach(
         &mut vec![],
+        &none,
         &CompRead::Facts(f2),
         &ProbeScope::everything(),
         0,

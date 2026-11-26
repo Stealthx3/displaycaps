@@ -5,9 +5,9 @@
 //!
 //! The session is worked out from `XDG_SESSION_TYPE`, `WAYLAND_DISPLAY` and `DISPLAY` as the probe
 //! was given them (see [`crate::runtime::ProbeOptions::environment`]); no socket is connected to.
-//! The compositor is not identified yet: that is a compositor-layer job (phase 5), so
-//! [`displaycaps_model::SessionInfo::compositor`] stays empty and the compositor layer reports
-//! `unknown` with reason `not_implemented`.
+//! The compositor's name and protocols ([`displaycaps_model::SessionInfo::compositor`] and
+//! `protocols`) come from the compositor backend (the Wayland registry, Mutter's D-Bus name or
+//! the X server), which the probe runs for the environment layer too and fills in afterwards.
 
 use std::collections::BTreeMap;
 

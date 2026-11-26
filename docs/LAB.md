@@ -37,6 +37,14 @@ _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 - Mode change: `swaymsg output Virtual-1 mode …` inside the Sway session while `displaycaps watch --layer kms --kms-poll 500` runs (the poll is opt-in).
 - The desktop guest's virtio GPU has two heads (2026-11-26); the second stays disconnected with no cached modes, so check-passive covers the GETCONNECTOR path that would otherwise send `count_modes = 0`.
 
+## Compositor checks (phase 5, desktop guest)
+- Sessions: `scripts/desktop-session.sh <gnome|plasma|sway|plasmax11>`; `plasmax11` is Plasma on Xorg (the RandR path; Xorg and kwin-x11 were added to the desktop guest on 2026-11-26 and to `provision-desktop.sh`). The script prints the session's environment, `DISPLAY` and `XAUTHORITY` for X11.
+- `scripts/compositor-gate.sh <kwin|sway|gnome|x11>`: compares the compositor layer with the desktop's own tool (`kscreen-doctor -j`/`-o`, `swaymsg -t get_outputs`, `gdctl show`, `xrandr --current`, normalized by `scripts/compositor-oracle.py`) in the default state, after a scale change and after a mode change made with that tool, then restores the defaults. One comparison: `scripts/compositor-diff.sh <desktop> <label>`.
+- `scripts/compositor-passive.sh <wayland|x11>`: logs every request the probe and a watch send (WAYLAND_DEBUG=1; dbus-monitor on the session bus for Mutter; an xtrace proxy for X11, with the lab user let in by `xhost +si:localuser` for the run) and fails on anything but the read-only set.
+- `scripts/compositor-watch-check.sh <desktop>`: a scale change made with the desktop's tool must arrive as a `CompositorChange` watch event.
+- `swaymsg` needs `SWAYSOCK`; the scripts find it under `$XDG_RUNTIME_DIR`.
+- The virtio GPU and QEMU's EDID offer no HDR, VRR or RGB-range control, so those switches can't be flipped in the lab; their mapping is covered by unit tests over simulated facts (`compositor/tests.rs`).
+
 ## Commands
 - Build: `scripts/lab.sh run 'cargo build --workspace'`
 - Gate:  `scripts/lab.sh run 'bash scripts/gate.sh 2>&1 | tail -n 60'`
@@ -48,6 +56,7 @@ _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 - 2026-11-21 — workstation capture: lab-built `dist/displaycaps capture` run once on the host under `scripts/check-passive.sh` (approved; passed: no DRM setters, no master, no forced probe, no I2C/CEC). `drm_info` isn't installed on the host, so the capture has no KMS dump.
 
 ## Log
+- 2026-11-26 — Phase 5 gate: compositor-gate identical on GNOME (6 facts per state), KWin (9), Sway (5) and Plasma on X11 (3; no scale on X11), each in the default state and after a scale and a mode change; compositor-passive: Wayland 33 (GNOME), 36 (KWin) and 16 (Sway) requests, all read-only; Mutter got only GetCurrentState (2 calls: probe and watch); X11 38 requests, all read-only, no GetScreenResources. Watch: CompositorChange on all four; re-probe 3 ms (Sway), 60–78 ms (GNOME, KWin, X11) while the compositor applies the change (KWin's own answers take 40 ms at rest, 97 ms during the change, with software rendering). Probe of compositor + environment, median of 20: 6.7 ms GNOME, 19 ms KWin, 1.2 ms Sway.
 - 2026-11-21 — doctor OK; Debian 13 base present. lab-displaycaps-main created and provisioned (Rust 1.99.1, cargo-deny 0.22.0, cargo-fuzz 0.13.2).
 - 2026-11-26 — Phase 3 gate (after review fixes, two heads): kms-diff identical on GNOME, Plasma and Sway (46 facts each); check-passive ok for `probe` and `watch --kms-poll` in each session; seat-rule control: with seat0 switched to a text VT (VT_ACTIVATE ioctl as root; `chvt` isn't installed) and the session variables still set, `probe` opens no card and reports `no_session`. First run (one head): check-passive ok for `probe` and `watch` in each session and for `probe` outside a session (0 primary-node opens); hotplug via PCI unbind/bind and Sway mode changes reported by `displaycaps watch`. After the unbind test the card came back as `card1`; a reboot restores `card0`.
 - 2026-11-21 — `scripts/lab.sh` is the master v1.2 copy; AudioCaps' local `put` command is not carried over (copy files with `lab.sh run` + the repo instead).

@@ -51,3 +51,15 @@ All notable changes to this project are documented here. The format follows
   version and `dcfeaturemask`); DP-to-HDMI adapters and MST hubs reported as
   devices in the sink chain.
 - `displaycaps link`: simulate a link from an EDID, mode and driver.
+- Compositor layer per endpoint: enabled, mode, scale, HDR and wide-colour
+  switches, SDR brightness, the output's image description, VRR policy, RGB
+  range, `max bpc` and the compositor's HDR capability, plus its mode list.
+  Read from Wayland (`wl_output`, color-management-v1, wlr-output-management,
+  KDE output device), Mutter's DisplayConfig over D-Bus and X11 RandR;
+  outputs joined to DRM connectors (correlation keys for `wl_output`, Mutter
+  monitors and RandR outputs). The environment layer names the compositor and
+  the display protocols it offers.
+- Watch events for compositor changes (Wayland output events, RandR
+  notifications).
+- `displaycaps compositor-facts` (lab tooling); captures save the
+  compositor facts too.

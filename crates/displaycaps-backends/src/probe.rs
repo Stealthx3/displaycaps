@@ -228,7 +228,13 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
     let want = compositor::want(scope);
     if want != compositor::Want::Nothing {
         tasks.push(Box::new(CompositorTask {
-            access: Some(compositor::access(root, &env, want)),
+            access: Some({
+                let mut a = compositor::access(root, &env, want);
+                if let compositor::Access::Live(p) = &mut a {
+                    p.limit(scope);
+                }
+                a
+            }),
             budget: opts
                 .deadline(Backend::Compositor)
                 .unwrap_or(std::time::Duration::from_secs(2)),
@@ -253,6 +259,7 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
         s.protocols = protocols;
     }
 
+    let mut edids: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let (mut endpoints, mut drm_avail) = if drm::in_scope(scope) {
         let quirks = if scope.layers.includes(&LayerKind::SinkChain)
             || scope.layers.includes(&LayerKind::Link)
@@ -262,6 +269,11 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
             Default::default()
         };
         let sys = res.sysfs.take().unwrap_or_default();
+        edids = sys
+            .edids
+            .iter()
+            .filter_map(|(k, v)| v.as_ref().ok().map(|b| (k.clone(), b.clone())))
+            .collect();
         let kms = match res.kms.take() {
             Some(k) => k,
             None if res.kms_timed_out => {
@@ -293,7 +305,7 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
             UnknownReason::Timeout,
             "compositor backend did not run".into(),
         ));
-        let a = compositor::attach(&mut endpoints, &read, scope, now);
+        let a = compositor::attach(&mut endpoints, &edids, &read, scope, now);
         drm_avail.insert(LayerKind::Compositor, a);
         endpoints.sort_by(|a, b| a.id.cmp(&b.id));
     }

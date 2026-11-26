@@ -24,8 +24,22 @@ type LogicalT<'a> = (i32, i32, f64, u32, bool, Vec<Spec>, Props<'a>);
 type StateT<'a> = (u32, Vec<MonitorT<'a>>, Vec<LogicalT<'a>>, Props<'a>);
 
 /// Reads Mutter's current state from the session bus at `address` (or the default one).
-pub(crate) fn read(address: Option<&str>, budget: Duration) -> Read<MutterFacts> {
-    match zruntime::block_on(read_async(address, budget)) {
+/// `sandboxed`: inside Flatpak, where the bus proxy hides names the app may not talk to.
+pub(crate) fn read(address: Option<&str>, budget: Duration, sandboxed: bool) -> Read<MutterFacts> {
+    match zruntime::block_on(read_async(address, budget, sandboxed, true)) {
+        Ok(f) => Read::Ok(f),
+        Err((r, d)) => Read::err(r, d),
+    }
+}
+
+/// Whether Mutter owns its DisplayConfig name, without calling it (the compositor's identity
+/// for the environment layer). An owned name gives empty facts.
+pub(crate) fn present(
+    address: Option<&str>,
+    budget: Duration,
+    sandboxed: bool,
+) -> Read<MutterFacts> {
+    match zruntime::block_on(read_async(address, budget, sandboxed, false)) {
         Ok(f) => Read::Ok(f),
         Err((r, d)) => Read::err(r, d),
     }
@@ -33,7 +47,12 @@ pub(crate) fn read(address: Option<&str>, budget: Duration) -> Read<MutterFacts>
 
 type Fail = (UnknownReason, String);
 
-async fn read_async(address: Option<&str>, budget: Duration) -> Result<MutterFacts, Fail> {
+async fn read_async(
+    address: Option<&str>,
+    budget: Duration,
+    sandboxed: bool,
+    state: bool,
+) -> Result<MutterFacts, Fail> {
     let builder = match address {
         Some(a) => zbus::connection::Builder::address(a),
         None => zbus::connection::Builder::session(),
@@ -51,6 +70,16 @@ async fn read_async(address: Option<&str>, budget: Duration) -> Result<MutterFac
         .map_err(|e| (UnknownReason::ReadError, e.to_string()))?;
     match dbus.name_has_owner(name).await {
         Ok(true) => {}
+        // Flatpak's bus proxy answers "no owner" for a name the app may not talk to.
+        Ok(false) if sandboxed => {
+            return Err((
+                UnknownReason::NotGranted,
+                format!(
+                    "{SERVICE} is not visible from the sandbox (needs --talk-name={SERVICE}, or \
+                     Mutter is not running)"
+                ),
+            ));
+        }
         Ok(false) => {
             return Err((
                 UnknownReason::ServiceNotRunning,
@@ -58,6 +87,9 @@ async fn read_async(address: Option<&str>, budget: Duration) -> Result<MutterFac
             ));
         }
         Err(e) => return Err((UnknownReason::NotGranted, e.to_string())),
+    }
+    if !state {
+        return Ok(MutterFacts::default());
     }
     let msg = conn
         .call_method(Some(SERVICE), PATH, Some(SERVICE), "GetCurrentState", &())

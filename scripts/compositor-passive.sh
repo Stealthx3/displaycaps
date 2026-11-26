@@ -11,9 +11,10 @@
 #   GetCurrentState (dbus-monitor on the session bus).
 # - X11: an xtrace proxy logs every request; allowed: QueryExtension, RandR QueryVersion,
 #   GetScreenResourcesCurrent, GetOutputInfo, GetCrtcInfo, ListOutputProperties,
-#   GetOutputProperty (delete and pending off), InternAtom-free GetAtomName, and the
-#   connection's own setup. GetScreenResources (a forced re-probe) fails.
-# Runs a probe of the compositor and environment layers, and a 3 s watch.
+#   GetOutputProperty (delete and pending off), RandR SelectInput (the watch: this connection's
+#   own event mask), GetAtomName, and the connection's own setup. GetScreenResources (a forced
+#   re-probe) fails.
+# Runs a probe of the compositor and environment layers, and a short watch (both sessions).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 bin="${DISPLAYCAPS:-dist/displaycaps}"
@@ -65,12 +66,16 @@ else
   # user is let in by name for the run (guest only) and removed again.
   xhost +si:localuser:"$(id -un)" >/dev/null
   xtrace -n -s -D :9 -d "$DISPLAY" -o "$out/x11.log" -- env DISPLAY=:9 "$bin" probe --layer compositor --layer environment >"$out/probe.json" 2>/dev/null || true
+  # The watch: SelectInput sets only this connection's event mask.
+  xtrace -n -s -D :9 -d "$DISPLAY" -o "$out/x11-watch.log" -- env DISPLAY=:9 timeout 3 "$bin" watch --layer compositor --events 1 --seconds 2 >/dev/null 2>&1 || true
+  cat "$out/x11-watch.log" >>"$out/x11.log"
   xhost -si:localuser:"$(id -un)" >/dev/null
   python3 - "$out/x11.log" <<'PY' || fail=1
 import re, sys
 allowed = {"QueryExtension", "RANDR-QueryVersion", "RANDR-GetScreenResourcesCurrent",
            "RANDR-GetOutputInfo", "RANDR-GetCrtcInfo", "RANDR-ListOutputProperties",
-           "RANDR-GetOutputProperty", "GetAtomName", "BIG-REQUESTS-Enable", "GetInputFocus"}
+           "RANDR-GetOutputProperty", "RANDR-SelectInput", "GetAtomName", "BIG-REQUESTS-Enable",
+           "GetInputFocus"}
 n, bad = 0, []
 for line in open(sys.argv[1], errors="replace"):
     m = re.search(r"(?:([\w-]+)-)?Request\([\d,]+\): (\w+)", line)

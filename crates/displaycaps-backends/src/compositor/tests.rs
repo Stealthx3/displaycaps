@@ -137,7 +137,13 @@ fn kwin_hdr() -> CompositorFacts {
 fn kwin_hdr_output_prefers_kwins_own_state() {
     let mut eps = vec![ep("card1-HDMI-A-1")];
     let scope = ProbeScope::everything();
-    let a = attach(&mut eps, &CompRead::Facts(kwin_hdr()), &scope, 7);
+    let a = attach(
+        &mut eps,
+        &Default::default(),
+        &CompRead::Facts(kwin_hdr()),
+        &scope,
+        7,
+    );
     assert_eq!(a, Availability::Read);
     let d = detail(&eps[0]);
     assert_eq!(d.compositor, CompositorKind::Kwin);
@@ -206,7 +212,13 @@ fn kwin_without_capabilities_reports_no_vrr_or_range() {
         w.outputs[0].image_description = None;
     }
     let mut eps = vec![ep("card1-HDMI-A-1")];
-    attach(&mut eps, &CompRead::Facts(f), &ProbeScope::everything(), 0);
+    attach(
+        &mut eps,
+        &Default::default(),
+        &CompRead::Facts(f),
+        &ProbeScope::everything(),
+        0,
+    );
     let d = detail(&eps[0]);
     assert!(d.vrr_policy.is_none() && d.rgb_range.is_none());
     assert!(
@@ -285,6 +297,7 @@ fn mutter_bt2100_and_names() {
     let mut eps = vec![ep("card1-HDMI-A-1")];
     attach(
         &mut eps,
+        &Default::default(),
         &CompRead::Facts(mutter(1, true)),
         &ProbeScope::everything(),
         0,
@@ -332,6 +345,7 @@ fn mutter_monitor_off_and_sdr() {
     let mut eps = vec![ep("card1-HDMI-A-1")];
     attach(
         &mut eps,
+        &Default::default(),
         &CompRead::Facts(mutter(0, false)),
         &ProbeScope::everything(),
         0,
@@ -387,6 +401,7 @@ fn wlroots_without_color_management_is_partial() {
     let mut eps = vec![ep("card0-DP-1"), ep("card0-HDMI-A-1"), ep("card0-DP-2")];
     let a = attach(
         &mut eps,
+        &Default::default(),
         &CompRead::Facts(wlroots(None)),
         &ProbeScope::everything(),
         0,
@@ -430,6 +445,7 @@ fn wlroots_with_a_pq_image_description_infers_hdr() {
     let mut eps = vec![ep("card0-DP-1"), ep("card0-HDMI-A-1")];
     attach(
         &mut eps,
+        &Default::default(),
         &CompRead::Facts(wlroots(Some(Read::Ok(pq_image())))),
         &ProbeScope::everything(),
         0,
@@ -453,6 +469,7 @@ fn wlroots_with_a_pq_image_description_infers_hdr() {
     );
     attach(
         &mut eps,
+        &Default::default(),
         &CompRead::Facts(wlroots(Some(failed))),
         &ProbeScope::everything(),
         0,
@@ -516,7 +533,13 @@ fn randr_joins_amdgpu_names_by_edid_and_keeps_strangers() {
         with_sink(ep("card1-DP-2"), &a),
     ];
     let f = randr(&[("DisplayPort-1", Some(&a)), ("HDMI-A-0", None)]);
-    attach(&mut eps, &CompRead::Facts(f), &ProbeScope::everything(), 0);
+    attach(
+        &mut eps,
+        &Default::default(),
+        &CompRead::Facts(f),
+        &ProbeScope::everything(),
+        0,
+    );
     let d = detail(&eps[1]);
     assert_eq!(d.compositor, CompositorKind::Xorg);
     assert_eq!(
@@ -526,7 +549,7 @@ fn randr_joins_amdgpu_names_by_edid_and_keeps_strangers() {
     assert_eq!(d.max_bpc.as_ref().unwrap().known(), Some(&10));
     assert_eq!(
         d.rgb_range.as_ref().unwrap().known().map(String::as_str),
-        Some("Full")
+        Some("full")
     );
     assert_eq!(d.hdr_enabled.as_ref().unwrap().known(), Some(&false));
     assert_eq!(d.wide_color_enabled.as_ref().unwrap().known(), Some(&true));
@@ -555,7 +578,13 @@ fn ties_between_cards_are_settled_by_the_sink() {
         with_sink(ep("card1-DP-1"), &a),
     ];
     let f = randr(&[("DP-1", Some(&a))]);
-    attach(&mut eps, &CompRead::Facts(f), &ProbeScope::everything(), 0);
+    attach(
+        &mut eps,
+        &Default::default(),
+        &CompRead::Facts(f),
+        &ProbeScope::everything(),
+        0,
+    );
     assert!(matches!(
         comp(&eps[0]).availability,
         Availability::Unknown { .. }
@@ -570,7 +599,13 @@ fn scope_limits_what_is_reported() {
         .with_layer(LayerKind::Compositor)
         .with_field(G::Hdr);
     let mut eps = vec![ep("card1-HDMI-A-1")];
-    attach(&mut eps, &CompRead::Facts(kwin_hdr()), &scope, 0);
+    attach(
+        &mut eps,
+        &Default::default(),
+        &CompRead::Facts(kwin_hdr()),
+        &scope,
+        0,
+    );
     let l = comp(&eps[0]);
     assert!(
         l.detail.is_none(),
@@ -585,7 +620,13 @@ fn scope_limits_what_is_reported() {
     // An output outside the endpoint scope is not reported.
     let scope = ProbeScope::everything().with_endpoint(EndpointId("card9-DP-9".into()));
     let mut eps = vec![];
-    attach(&mut eps, &CompRead::Facts(kwin_hdr()), &scope, 0);
+    attach(
+        &mut eps,
+        &Default::default(),
+        &CompRead::Facts(kwin_hdr()),
+        &scope,
+        0,
+    );
     assert!(eps.is_empty());
 }
 
@@ -593,7 +634,13 @@ fn scope_limits_what_is_reported() {
 fn unreadable_compositor_is_unknown_everywhere() {
     let mut eps = vec![ep("card1-HDMI-A-1")];
     let r = CompRead::Unreadable(UnknownReason::NoSession, "no session".into());
-    let a = attach(&mut eps, &r, &ProbeScope::everything(), 0);
+    let a = attach(
+        &mut eps,
+        &Default::default(),
+        &r,
+        &ProbeScope::everything(),
+        0,
+    );
     let unknown = |a: &Availability| {
         matches!(
             a,
@@ -687,4 +734,85 @@ fn fixture_facts_replay() {
         panic!("the lab fixture has compositor facts")
     };
     assert_eq!(identity(&f).unwrap().0.kind, CompositorKind::Kwin);
+}
+
+#[test]
+fn zero_based_x_names_join_by_edid_even_without_a_sink_record() {
+    let a = edid("workstation-card1-DP-2.bin");
+    let b = edid("workstation-card1-DP-3.bin");
+    // amdgpu's X driver: HDMI-A-0 is DRM's HDMI-A-1, HDMI-A-1 is DRM's HDMI-A-2. The sink layer
+    // isn't in scope, so only the connectors' EDIDs (read for the join) tell them apart.
+    let mut eps = vec![ep("card0-HDMI-A-1"), ep("card0-HDMI-A-2")];
+    let edids: std::collections::BTreeMap<String, Vec<u8>> = [
+        ("card0-HDMI-A-1".to_string(), a.clone()),
+        ("card0-HDMI-A-2".to_string(), b.clone()),
+    ]
+    .into_iter()
+    .collect();
+    let f = randr(&[("HDMI-A-0", Some(&a)), ("HDMI-A-1", Some(&b))]);
+    attach(
+        &mut eps,
+        &edids,
+        &CompRead::Facts(f),
+        &ProbeScope::everything(),
+        0,
+    );
+    assert_eq!(eps.len(), 2, "no extra endpoints");
+    let name = |e: &Endpoint| detail(e).output_name.known().cloned();
+    assert_eq!(name(&eps[0]).as_deref(), Some("HDMI-A-0"));
+    assert_eq!(name(&eps[1]).as_deref(), Some("HDMI-A-1"));
+    assert!(
+        eps.iter()
+            .all(|e| e.correlation[0].confidence == Confidence::Inferred)
+    );
+}
+
+#[test]
+fn a_second_output_for_a_taken_connector_is_not_a_new_endpoint() {
+    let a = edid("workstation-card1-DP-2.bin");
+    let mut eps = vec![ep("card0-HDMI-A-1")];
+    let edids = [("card0-HDMI-A-1".to_string(), a.clone())]
+        .into_iter()
+        .collect();
+    let f = randr(&[("HDMI-A-1", Some(&a)), ("HDMI-1-1", Some(&a))]);
+    attach(
+        &mut eps,
+        &edids,
+        &CompRead::Facts(f),
+        &ProbeScope::everything(),
+        0,
+    );
+    assert_eq!(eps.len(), 1);
+    assert_eq!(
+        eps[0]
+            .layers
+            .iter()
+            .filter(|l| l.layer == LayerKind::Compositor)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn xwayland_hides_the_hosts_hdr_state() {
+    let f = randr(&[("XWAYLAND0", None)]);
+    let mut eps = vec![];
+    attach(
+        &mut eps,
+        &Default::default(),
+        &CompRead::Facts(f.clone()),
+        &ProbeScope::everything(),
+        0,
+    );
+    let e = &eps[0];
+    assert_eq!(e.id.0, "compositor-XWAYLAND0");
+    assert_eq!(e.class, EndpointClass::Virtual);
+    assert!(matches!(
+        detail(e).hdr_enabled.as_ref().unwrap(),
+        Value::Unknown {
+            reason: UnknownReason::NotGranted,
+            ..
+        }
+    ));
+    assert_eq!(identity(&f).unwrap().0.kind, CompositorKind::Other);
 }

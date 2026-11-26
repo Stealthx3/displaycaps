@@ -362,9 +362,12 @@ pub fn capture(opts: &Options) -> io::Result<PathBuf> {
                 let file = format!("{name}.json");
                 let mut text = serde_json::to_string_pretty(&f).map_err(io::Error::other)?;
                 text.push('\n');
-                if fs::write(st.dir.join("commands").join(&file), st.redactor.text(&text)).is_ok() {
-                    rec.exit_code = Some(0);
-                    rec.output_file = Some(file);
+                match fs::write(st.dir.join("commands").join(&file), st.redactor.text(&text)) {
+                    Ok(()) => {
+                        rec.exit_code = Some(0);
+                        rec.output_file = Some(file);
+                    }
+                    Err(e) => rec.skipped = Some(format!("could not write {file}: {e}")),
                 }
             }
             Err(e) => {

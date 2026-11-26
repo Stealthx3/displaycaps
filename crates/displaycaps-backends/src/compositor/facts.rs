@@ -405,17 +405,55 @@ impl CompositorFacts {
                 *h = to_hex(&b);
             }
         };
+        // Serials also appear inside free-text fields (wlroots' default description is
+        // "make model serial (name)"): cut them out there first.
+        let mut serials: Vec<String> = vec![];
+        if let Some(Read::Ok(w)) = &self.wayland {
+            serials.extend(
+                w.wlr_heads
+                    .iter()
+                    .flatten()
+                    .filter_map(|h| h.serial.clone()),
+            );
+            serials.extend(
+                w.kde_devices
+                    .iter()
+                    .flatten()
+                    .filter_map(|d| d.serial.clone()),
+            );
+        }
+        if let Some(Read::Ok(m)) = &self.mutter {
+            serials.extend(m.monitors.iter().map(|m| m.serial.clone()));
+        }
+        serials.retain(|s| s.len() >= 3 && !s.starts_with("sha256:"));
+        let scrub = |t: &mut String| {
+            for s in &serials {
+                if t.contains(s.as_str()) {
+                    *t = t.replace(s.as_str(), "<serial>");
+                }
+            }
+        };
         if let Some(Read::Ok(w)) = &mut self.wayland {
+            for o in &mut w.outputs {
+                o.description.iter_mut().for_each(scrub);
+                o.model.iter_mut().for_each(scrub);
+            }
             for h in w.wlr_heads.iter_mut().flatten() {
+                h.description.iter_mut().for_each(scrub);
+                h.model.iter_mut().for_each(scrub);
                 h.serial.iter_mut().for_each(hash);
             }
             for d in w.kde_devices.iter_mut().flatten() {
+                d.model.iter_mut().for_each(scrub);
                 d.serial.iter_mut().for_each(hash);
                 d.edid_hex.iter_mut().for_each(edid);
             }
         }
         if let Some(Read::Ok(m)) = &mut self.mutter {
             for mon in &mut m.monitors {
+                if let Some(serde_json::Value::String(n)) = mon.properties.get_mut("display-name") {
+                    scrub(n);
+                }
                 hash(&mut mon.serial);
             }
         }
@@ -506,7 +544,27 @@ mod tests {
             })),
             ..Default::default()
         };
+        f.wayland = Some(Read::Ok(WaylandFacts {
+            outputs: vec![WlOutput {
+                description: Some("Make Model AB12345 (DP-1)".into()),
+                ..Default::default()
+            }],
+            wlr_heads: Some(vec![WlrHead {
+                description: Some("Make Model AB12345 (DP-1)".into()),
+                serial: Some("AB12345".into()),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        }));
         f.redact();
+        let w = f.wayland.as_ref().unwrap().ok().unwrap();
+        assert_eq!(
+            w.outputs[0].description.as_deref(),
+            Some("Make Model <serial> (DP-1)")
+        );
+        let h = &w.wlr_heads.as_ref().unwrap()[0];
+        assert_eq!(h.description.as_deref(), Some("Make Model <serial> (DP-1)"));
+        assert!(h.serial.as_ref().unwrap().starts_with("sha256:"));
         let s = &f.mutter.as_ref().unwrap().ok().unwrap().monitors[0].serial;
         assert!(s.starts_with("sha256:"));
         let once = s.clone();
