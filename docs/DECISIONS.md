@@ -35,3 +35,4 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-21** · decision · HDMI Forum VRRmax 0 is resolved by the preferred resolution's highest refresh, marked inferred — _why:_ never overstate a VRR range the TV does not state _(by claude)_
 - **2026-11-21** · decision · Phase 2 fuzz run: 2 hours per target on the final code (about 905M executions, 0 crashes) _(by claude)_
 - **2026-11-21** · decision · Gate 2.7's HTPC part met by the TV from AudioCaps' existing HTPC capture (Hisense, HEC 41008); the receiver was never captured and is out of scope — _why:_ maintainer ruled out the HTPC _(by claude)_
+- **2026-11-26** · approval · Approved the phase 2 gate (TV identified from the existing HTPC capture, receiver out of scope); merge to main and start phase 3
