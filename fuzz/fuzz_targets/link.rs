@@ -53,7 +53,8 @@ fuzz_target!(|d: &[u8]| {
         max_frl: (d[15] & 2 != 0).then_some(frl),
         frl: [FrlGate::Enabled, FrlGate::Unsupported, FrlGate::Unknown][usize::from(d[15] >> 2) % 3].clone(),
         max_dp: (d[15] & 32 != 0).then_some(dp),
-        dsc: d[15] & 64 != 0,
+        dsc: (d[15] & 64 != 0).then_some(d[15] & 128 != 0),
+        dsc_first: d[14] & 0x80 != 0,
     };
     let depths: Vec<u8> = [8u8, 10, 12, 16].into_iter().filter(|b| d[20] & (1 << (b / 4)) != 0).collect();
     let sink = SinkFormats {
@@ -62,6 +63,8 @@ fuzz_target!(|d: &[u8]| {
         max_frl: (d[22] & 2 != 0).then_some(frl),
         max_dp: (d[22] & 4 != 0).then_some(dp),
         dsc: d[22] & 8 != 0,
+        dsc_max_frl: (d[22] & 16 != 0).then_some(frl),
+        dsc_max_bpc: (d[22] & 32 != 0).then_some(d[20] % 17),
     };
     let req = Request {
         max_bpc: d[23] % 20,

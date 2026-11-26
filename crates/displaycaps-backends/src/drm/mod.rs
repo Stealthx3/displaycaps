@@ -453,23 +453,24 @@ pub(crate) fn read_sysfs(root: &SystemRoot, scope: &ProbeScope) -> SysRead {
                 }
             }
         }
-        let driver_state = scope.layers.includes(&LayerKind::KernelDriver)
-            && scope.fields.includes(&FieldGroup::Driver)
-            || link_in_scope(scope);
-        if driver_state {
+        let detail = scope.layers.includes(&LayerKind::KernelDriver)
+            && scope.fields.includes(&FieldGroup::Driver);
+        if detail || link_in_scope(scope) {
             out.kernel = root
                 .read_string("/proc/sys/kernel/osrelease")
                 .ok()
                 .map(|s| s.trim().to_string());
-        }
-        if driver_state {
             for card in cards {
                 let Some(driver) = &card.driver else { continue };
                 for (module, param) in sysfs::display_parameters(driver) {
+                    let name = format!("{module}.{param}");
+                    // For the link alone, only the parameters it needs.
+                    if !detail && !link::LINK_PARAMETERS.contains(&name.as_str()) {
+                        continue;
+                    }
                     let path = format!("/sys/module/{module}/parameters/{param}");
                     if let Ok(v) = root.read_string(&path) {
                         let list = out.params.entry(card.name.clone()).or_default();
-                        let name = format!("{module}.{param}");
                         if !list.iter().any(|p| p.name == name) {
                             list.push(ModuleParameter {
                                 name,
@@ -670,7 +671,11 @@ pub(crate) fn endpoints(
         let driver_name: Option<String> = km
             .map(|(k, _)| k.driver.clone())
             .filter(|d| !d.is_empty())
-            .or_else(|| card.and_then(|k| k.driver.clone()));
+            .or_else(|| card.and_then(|k| k.driver.clone()))
+            .map(|d| link::normalize_driver(&d).to_string());
+        let subconnector: Option<String> = km
+            .and_then(|(_, k)| k.prop("subconnector"))
+            .and_then(|p| p.enum_name.clone());
         let params = sys.params.get(&c.card).cloned().unwrap_or_default();
         let frl = link::frl_gate(
             driver_name.as_deref(),
@@ -724,8 +729,15 @@ pub(crate) fn endpoints(
                 _ => {}
             }
             if let Some(s) = &mut ep.sink {
-                let devices = link::chain(&ctype_for_chain, sink_full.as_ref(), mst);
-                if !devices.is_empty() {
+                // Only with the KMS state: without it an MST hub can't be seen, and a partial list
+                // would look complete.
+                let devices = link::chain(
+                    &ctype_for_chain,
+                    subconnector.as_deref(),
+                    sink_full.as_ref(),
+                    mst,
+                );
+                if km.is_some() && !devices.is_empty() {
                     s.chain = Value::inferred(
                         devices,
                         prov(
@@ -900,11 +912,13 @@ pub(crate) fn endpoints(
             let layer = match (kms, &kms_full) {
                 (_, Some(k)) => link::link_layer(&link::Inputs {
                     connector: &ctype_for_chain,
+                    subconnector: subconnector.as_deref(),
                     sink: sink_full.as_ref(),
                     kms: Some(k),
                     mst,
                     driver: driver_name.as_deref(),
                     frl: frl.clone(),
+                    source: None,
                     with_detail: field(FieldGroup::Link),
                     now,
                 }),

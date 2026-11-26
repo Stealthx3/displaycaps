@@ -1641,7 +1641,7 @@
                 "layer": "link",
                 "source": {
                   "kind": "derived",
-                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver policy"
                 },
                 "read_at_ms": 1795262784216
               }
@@ -1659,7 +1659,7 @@
                 "layer": "link",
                 "source": {
                   "kind": "derived",
-                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver policy"
                 },
                 "read_at_ms": 1795262784216
               }
@@ -1672,7 +1672,7 @@
                 "layer": "link",
                 "source": {
                   "kind": "derived",
-                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver policy"
                 },
                 "read_at_ms": 1795262784216
               }
@@ -1685,7 +1685,7 @@
                 "layer": "link",
                 "source": {
                   "kind": "derived",
-                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver policy"
                 },
                 "read_at_ms": 1795262784216
               }
@@ -1698,7 +1698,7 @@
                 "layer": "link",
                 "source": {
                   "kind": "derived",
-                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver policy"
                 },
                 "read_at_ms": 1795262784216
               }
@@ -1711,7 +1711,7 @@
                 "layer": "link",
                 "source": {
                   "kind": "derived",
-                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver limits"
+                  "from": "active mode, max bpc and color format (KMS), sink EDID, driver policy"
                 },
                 "read_at_ms": 1795262784216
               }
@@ -1719,7 +1719,7 @@
             "capacity_kbps": {
               "state": "unknown",
               "reason": "not_exposed",
-              "detail": "no link capacity"
+              "detail": "a virtual output has no link"
             }
           }
         }

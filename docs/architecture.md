@@ -6,8 +6,8 @@ Crate boundaries as built. The design is in the development plan; this file trac
 | --- | --- | --- | --- |
 | `displaycaps-model` | OS-neutral types and the versioned JSON schema: `Value<T>` with provenance and confidence, `ProbeScope`, display endpoints, sink record and identity (with the sink-key algorithm shared with AudioCaps), per-layer capability sets and state, presentation paths, effective sets, path reports, content requests, recommendations, findings, redaction | serde, schemars, sha2 | Schema v1 (phase 1) |
 | `displaycaps-parse` | Pure parsers over bytes and text, no I/O: EDID base block (`timing`, with `dmt`, `cvt`, `vic` tables), CTA-861 audio (copied from AudioCaps) and video (`cta_video`), DisplayID (`displayid`), SADs, PNP ids, os-release | — | EDID video parser (phase 2), checked against edid-decode and di-edid-decode by `scripts/edid-diff.sh` |
-| `displaycaps-link` | Pure link-budget maths: TMDS, FRL, DP, DSC, chroma and bit depth | model | Empty until phase 4 |
-| `displaycaps-backends` | System access through `SystemRoot` (live `/` or a capture tree): runtime with per-backend deadlines, watch (manual, timer, DRM hotplug uevents, KMS change poll), environment and sandbox; `sink` builds the sink record from an EDID with quirk data; `drm` reads sysfs DRM (connectors, cached EDID, GPU, driver) and KMS through the `drm` crate's read-only ioctls (or a fixture's `drm_info -j`), and joins them into endpoints; Wayland, Mutter, RandR, VA-API and Vulkan backends arrive in phases 5–6 | model, parse, rules, drm, nix | Copied foundation (phase 1), sink record (phase 2), sysfs and KMS (phase 3) |
+| `displaycaps-link` | Pure link-budget maths: TMDS, FRL, DP, DSC, chroma and bit depth (`budget`), and the driver-like format choice with rejected options and reasons (`choose`) | model | Phase 4 |
+| `displaycaps-backends` | System access through `SystemRoot` (live `/` or a capture tree): runtime with per-backend deadlines, watch (manual, timer, DRM hotplug uevents, KMS change poll), environment and sandbox; `sink` builds the sink record from an EDID with quirk data; `drm` reads sysfs DRM (connectors, cached EDID, GPU, driver) and KMS through the `drm` crate's read-only ioctls (or a fixture's `drm_info -j`), and joins them into endpoints; Wayland, Mutter, RandR, VA-API and Vulkan backends arrive in phases 5–6 | model, parse, link, rules, drm, nix | Copied foundation (phase 1), sink record (phase 2), sysfs and KMS (phase 3) |
 | `displaycaps-rules` | Declarative rule and quirk packs, bundled and overridable from `/etc/displaycaps/` or the app bundle | model | Engine copied (phase 1); starter rules in phase 7 |
 | `displaycaps-ffi` | The C ABI (`dc_*`, `libdisplaycaps.so.1`, `include/displaycaps.h` from cbindgen) | backends, rules | Pattern copied (phase 1); full ABI in phase 9 |
 | `displaycaps-cli` | `displaycaps` tool: probe, schema, passive capture | backends, rules | Phase 1 |
@@ -29,6 +29,11 @@ Crate boundaries as built. The design is in the development plan; this file trac
 - **Kept apart from AudioCaps.** Symbols `dc_*`, schema ids `displaycaps-*`, data paths
   `/usr/share/displaycaps/` and `/etc/displaycaps/`. The sink key is the one shared value;
   `crates/displaycaps-parse/tests/parity.rs` checks it against AudioCaps v1.0.0's own output.
+- **The link is inferred.** KMS reports what was requested, so the link layer is worked out by
+  `displaycaps-link` from the active mode, `max bpc`, `color format`, the sink's EDID and a table
+  of driver limits and feature gates (`drm/link.rs`; moves to data packs in phase 7). The FRL rate
+  needed is an approximation of the HDMI 2.1 capacity computation, so results near a boundary
+  carry little headroom.
 - **Copied code names its source.** Each file copied from AudioCaps carries
   `Copied from AudioCaps v1.0.0 (commit 049d053) <path>` (or `Adapted from …`); `scripts/gate.sh`
   checks it.

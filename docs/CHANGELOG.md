@@ -42,3 +42,12 @@ All notable changes to this project are documented here. The format follows
 - Watch events for DRM hotplug (kernel uevents) and, opt-in, KMS changes
   (mode, HDR, VRR) with `ProbeOptions::kms_poll_interval`.
 - `displaycaps watch` and `displaycaps kms-facts` (lab tooling).
+- Link-budget engine (`displaycaps-link`): TMDS, FRL, DisplayPort and DSC
+  rates, and the format a driver sends for a mode (depth reduction, then DSC,
+  then YCbCr 4:2:0) with every better format it rejected and why.
+- Inferred link layer per endpoint: signal (TMDS, FRL, DP, virtual), colour
+  format, bit depth, required rate, capacity and rejected formats, from the
+  sink EDID, KMS and the driver's limits and HDMI FRL gate (amdgpu by kernel
+  version and `dcfeaturemask`); DP-to-HDMI adapters and MST hubs reported as
+  devices in the sink chain.
+- `displaycaps link`: simulate a link from an EDID, mode and driver.

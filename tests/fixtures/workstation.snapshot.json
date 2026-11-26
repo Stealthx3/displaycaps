@@ -2369,23 +2369,9 @@
           }
         },
         "chain": {
-          "state": "known",
-          "value": [
-            {
-              "kind": "adapter",
-              "confidence": "inferred",
-              "evidence": "HDMI sink EDID on a DisplayPort connector"
-            }
-          ],
-          "confidence": "inferred",
-          "provenance": {
-            "layer": "sink_chain",
-            "source": {
-              "kind": "derived",
-              "from": "connector type, sink EDID and MST path"
-            },
-            "read_at_ms": 1795262845660
-          }
+          "state": "unknown",
+          "reason": "not_implemented",
+          "detail": "devices in between are detected from the connector and link layers"
         }
       },
       "layers": [

@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The format a driver sends for a mode, worked out from what the source, the sink and KMS allow.
 //!
-//! The policy approximates what amdgpu and i915 do when they pick a link format:
-//! 1. the requested format (KMS `color format`, or RGB when it's automatic) at the highest depth
-//!    `max bpc` and the sink allow, then lower depths in steps of 2 down to 8;
-//! 2. DSC at the highest depth, when both ends support it (FRL or DisplayPort);
-//! 3. YCbCr 4:2:0, when the format is automatic and the sink takes 4:2:0 for the mode, at the
-//!    highest depth that fits.
+//! The policy approximates the drivers:
+//! 1. the requested format (KMS `color format`, or RGB when automatic) at the highest depth
+//!    `max bpc` and the sink allow;
+//! 2. then either DSC at that depth before lower depths (amdgpu: [`SourceLimits::dsc_first`]) or
+//!    lower depths before DSC (i915), down to 8 bits on HDMI and 6 on DisplayPort;
+//! 3. YCbCr 4:2:0, when the format is automatic and the sink takes 4:2:0 for the mode.
 //!
 //! On HDMI, TMDS is used when the format fits the TMDS limit of both ends; otherwise FRL at the
 //! highest rate both support, if the driver has FRL on. Every option above the chosen one is
-//! returned as [`Rejected`] with the reason, which is what explains a fallback.
+//! returned as [`Rejected`] with the reason. An option rejected only because something is unknown
+//! (the driver's FRL state, a link rate) is marked [`Rejected::unknown`]: the chosen format is then
+//! a lower bound, not the answer ([`Choice::uncertain`]).
 
-use displaycaps_model::{ColorFormat, DpLink, FrlRate, LinkSignal, Mode};
+use displaycaps_model::{ColorFormat, DpLink, DpRate, FrlRate, LinkSignal, Mode, Timing};
 
 use crate::budget::{
-    self, frl_capacity_kbps, frl_required_kbps, stream_kbps, tmds_character_rate_khz,
+    self, frl_capacity_kbps, frl_required_kbps, link_stream_kbps, tmds_character_rate_khz,
 };
 
 /// The kind of link.
@@ -37,8 +39,7 @@ pub enum LinkKind {
 pub enum FrlGate {
     /// FRL is on.
     Enabled,
-    /// The hardware or driver could, but FRL is off (e.g. amdgpu before Linux 7.4 without the
-    /// feature-mask bit). The string says why.
+    /// FRL could work but the driver has it off. The string says why.
     DisabledByDriver(String),
     /// The driver has no FRL support.
     Unsupported,
@@ -46,19 +47,21 @@ pub enum FrlGate {
     Unknown,
 }
 
-/// What the source (GPU, driver and KMS) allows.
+/// What the source (GPU, driver and KMS) allows. `None` means unknown.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceLimits {
-    /// Highest TMDS character rate in kHz; `None` when unknown (the sink's limit is used alone).
+    /// Highest TMDS character rate in kHz.
     pub max_tmds_khz: Option<u32>,
     /// Highest FRL rate the hardware supports.
     pub max_frl: Option<FrlRate>,
     /// Whether the driver has FRL on.
     pub frl: FrlGate,
-    /// Highest DisplayPort link; `None` when unknown (the sink's limit is used alone).
+    /// Highest DisplayPort link.
     pub max_dp: Option<DpLink>,
     /// Whether the source can compress with DSC.
-    pub dsc: bool,
+    pub dsc: Option<bool>,
+    /// The driver turns DSC on at the requested depth before it lowers the depth (amdgpu).
+    pub dsc_first: bool,
 }
 
 /// What the sink accepts for one mode.
@@ -75,6 +78,10 @@ pub struct SinkFormats {
     pub max_dp: Option<DpLink>,
     /// Whether the sink decodes DSC.
     pub dsc: bool,
+    /// Highest FRL rate with DSC (HDMI).
+    pub dsc_max_frl: Option<FrlRate>,
+    /// Highest depth DSC carries.
+    pub dsc_max_bpc: Option<u8>,
 }
 
 impl SinkFormats {
@@ -126,6 +133,12 @@ impl Choice {
         )
         .unwrap_or(1000)
     }
+
+    /// Whether a better option was rejected only because something is unknown: the chosen
+    /// format is then a lower bound.
+    pub fn uncertain(&self) -> bool {
+        self.rejected.iter().any(|r| r.unknown)
+    }
 }
 
 /// An option that was not taken.
@@ -139,9 +152,11 @@ pub struct Rejected {
     pub dsc: bool,
     /// Why it was not taken.
     pub reason: String,
+    /// Rejected for lack of knowledge, not because it doesn't fit.
+    pub unknown: bool,
 }
 
-const DEPTHS: [u8; 4] = [16, 12, 10, 8];
+const DEPTHS: [u8; 5] = [16, 12, 10, 8, 6];
 
 fn name(f: ColorFormat) -> &'static str {
     match f {
@@ -168,6 +183,18 @@ fn frl_name(r: FrlRate) -> String {
     format!("FRL {}×{} Gbit/s", r.lanes, r.gbps_per_lane)
 }
 
+/// Why an option failed, and whether only for lack of knowledge.
+type Miss = (String, bool);
+
+struct Ctx<'a> {
+    mode: &'a Mode,
+    t: Timing,
+    link: LinkKind,
+    source: &'a SourceLimits,
+    sink: &'a SinkFormats,
+    req: Request,
+}
+
 /// The best format for `mode`, or every option with its reason when nothing fits.
 pub fn choose(
     mode: &Mode,
@@ -182,26 +209,22 @@ pub fn choose(
             bpc: req.max_bpc,
             dsc: false,
             reason: "the mode has no timing (pixel clock unknown)".into(),
+            unknown: true,
         }]);
     };
-    let mut rejected = vec![];
-    let formats: Vec<ColorFormat> = match req.color_format {
-        Some(f) => vec![f],
-        None => vec![ColorFormat::Rgb],
+    let cx = Ctx {
+        mode,
+        t,
+        link,
+        source,
+        sink,
+        req,
     };
-    // 1. The requested format, depth by depth.
-    for &f in &formats {
-        if let Some(c) = try_depths(mode, &t, link, source, sink, req, f, false, &mut rejected) {
-            return Ok(Choice { rejected, ..c });
-        }
+    let mut rejected = vec![];
+    let first = req.color_format.unwrap_or(ColorFormat::Rgb);
+    if let Some(c) = cx.format(first, &mut rejected) {
+        return Ok(Choice { rejected, ..c });
     }
-    // 2. DSC.
-    for &f in &formats {
-        if let Some(c) = try_depths(mode, &t, link, source, sink, req, f, true, &mut rejected) {
-            return Ok(Choice { rejected, ..c });
-        }
-    }
-    // 3. 4:2:0 when the format is automatic.
     if req.color_format.is_none() {
         let f = ColorFormat::Ycbcr420;
         if sink.depths(f).is_empty() {
@@ -210,232 +233,300 @@ pub fn choose(
                 bpc: 8,
                 dsc: false,
                 reason: "the sink doesn't take YCbCr 4:2:0 for this mode".into(),
+                unknown: false,
             });
-        } else if let Some(c) =
-            try_depths(mode, &t, link, source, sink, req, f, false, &mut rejected)
-        {
+        } else if let Some(c) = cx.format(f, &mut rejected) {
             return Ok(Choice { rejected, ..c });
         }
     }
     Err(rejected)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn try_depths(
-    mode: &Mode,
-    t: &displaycaps_model::Timing,
-    link: LinkKind,
-    source: &SourceLimits,
-    sink: &SinkFormats,
-    req: Request,
-    f: ColorFormat,
-    dsc: bool,
-    rejected: &mut Vec<Rejected>,
-) -> Option<Choice> {
-    let sink_depths = sink.depths(f);
-    if sink_depths.is_empty() && link != LinkKind::Virtual {
-        rejected.push(Rejected {
-            color_format: f,
-            bpc: 8,
-            dsc,
-            reason: format!("the sink doesn't take {} for this mode", name(f)),
-        });
-        return None;
-    }
-    if dsc && !(source.dsc && sink.dsc) {
-        rejected.push(Rejected {
-            color_format: f,
-            bpc: req.max_bpc,
-            dsc,
-            reason: format!(
-                "DSC needs both ends: source {}, sink {}",
-                if source.dsc { "yes" } else { "no" },
-                if sink.dsc { "yes" } else { "no" }
-            ),
-        });
-        return None;
-    }
-    let mut depths: Vec<u8> = DEPTHS
-        .iter()
-        .copied()
-        .filter(|d| *d <= req.max_bpc && (link == LinkKind::Virtual || sink_depths.contains(d)))
-        .collect();
-    if depths.is_empty() {
-        depths.push(8);
-    }
-    // With DSC only the highest depth is tried: compression takes the place of depth reduction.
-    if dsc {
-        depths.truncate(1);
-    }
-    // Depth capped by the sink rather than by bandwidth: say so before the depths tried.
-    let sink_max = sink_depths.iter().max().copied();
-    if !dsc
-        && let Some(m) = sink_max
-        && m < req.max_bpc
-        && link != LinkKind::Virtual
-    {
-        rejected.push(Rejected {
-            color_format: f,
-            bpc: req.max_bpc,
-            dsc,
-            reason: format!("the sink takes {} at {m} bits at most", name(f)),
-        });
-    }
-    for &bpc in &depths {
-        match fits(mode, t, link, source, sink, f, bpc, dsc) {
-            Ok(c) => return Some(c),
-            Err(reason) => rejected.push(Rejected {
-                color_format: f,
-                bpc,
-                dsc,
-                reason,
-            }),
+impl Ctx<'_> {
+    fn min_depth(&self) -> u8 {
+        match self.link {
+            LinkKind::DisplayPort { .. } => 6,
+            _ => 8,
         }
     }
-    None
-}
 
-#[allow(clippy::too_many_arguments)]
-fn fits(
-    mode: &Mode,
-    t: &displaycaps_model::Timing,
-    link: LinkKind,
-    source: &SourceLimits,
-    sink: &SinkFormats,
-    f: ColorFormat,
-    bpc: u8,
-    dsc: bool,
-) -> Result<Choice, String> {
-    let base = |signal, required, capacity, dsc_bpp| Choice {
-        signal,
-        color_format: f,
-        bpc,
-        dsc_bpp_x16: dsc_bpp,
-        required_kbps: required,
-        capacity_kbps: capacity,
-        rejected: vec![],
-    };
-    match link {
-        LinkKind::Virtual => Ok(base(
-            LinkSignal::Virtual,
-            stream_kbps(t.pixel_clock_khz, f, bpc),
-            0,
-            None,
-        )),
-        LinkKind::Hdmi => {
-            let tmds_limit = match (source.max_tmds_khz, sink.max_tmds_khz) {
+    /// One format: depths and DSC in the driver's order.
+    fn format(&self, f: ColorFormat, rejected: &mut Vec<Rejected>) -> Option<Choice> {
+        let virt = self.link == LinkKind::Virtual;
+        let sink_depths = self.sink.depths(f);
+        if sink_depths.is_empty() && !virt {
+            rejected.push(Rejected {
+                color_format: f,
+                bpc: self.req.max_bpc,
+                dsc: false,
+                reason: format!("the sink doesn't take {} for this mode", name(f)),
+                unknown: false,
+            });
+            return None;
+        }
+        let mut depths: Vec<u8> = DEPTHS
+            .iter()
+            .copied()
+            .filter(|d| {
+                *d <= self.req.max_bpc
+                    && *d >= self.min_depth()
+                    && (virt || sink_depths.contains(d))
+            })
+            .collect();
+        if depths.is_empty() {
+            depths.push(
+                sink_depths
+                    .iter()
+                    .copied()
+                    .min()
+                    .unwrap_or(8)
+                    .max(self.min_depth()),
+            );
+        }
+        if let Some(m) = sink_depths.iter().max().copied()
+            && m < self.req.max_bpc
+            && !virt
+        {
+            rejected.push(Rejected {
+                color_format: f,
+                bpc: self.req.max_bpc,
+                dsc: false,
+                reason: format!("the sink takes {} at {m} bits at most", name(f)),
+                unknown: false,
+            });
+        }
+        let top = depths[0];
+        let try_one = |bpc: u8, dsc: bool, rejected: &mut Vec<Rejected>| -> Option<Choice> {
+            match self.fits(f, bpc, dsc) {
+                Ok(c) => Some(c),
+                Err((reason, unknown)) => {
+                    rejected.push(Rejected {
+                        color_format: f,
+                        bpc,
+                        dsc,
+                        reason,
+                        unknown,
+                    });
+                    None
+                }
+            }
+        };
+        if let Some(c) = try_one(top, false, rejected) {
+            return Some(c);
+        }
+        // DSC only when both ends are known to do it; an unknown source is a rejection for lack
+        // of knowledge below.
+        let dsc_possible = !virt && self.source.dsc == Some(true) && self.sink.dsc;
+        if self.source.dsc_first
+            && dsc_possible
+            && let Some(c) = try_one(top, true, rejected)
+        {
+            return Some(c);
+        }
+        for &bpc in &depths[1..] {
+            if let Some(c) = try_one(bpc, false, rejected) {
+                return Some(c);
+            }
+        }
+        if !self.source.dsc_first || !dsc_possible {
+            if dsc_possible {
+                if let Some(c) = try_one(top, true, rejected) {
+                    return Some(c);
+                }
+            } else if !virt {
+                rejected.push(Rejected {
+                    color_format: f,
+                    bpc: top,
+                    dsc: true,
+                    reason: format!(
+                        "DSC needs both ends: source {}, sink {}",
+                        match self.source.dsc {
+                            Some(true) => "yes",
+                            Some(false) => "no",
+                            None => "unknown",
+                        },
+                        if self.sink.dsc { "yes" } else { "no" }
+                    ),
+                    unknown: self.source.dsc.is_none() && self.sink.dsc,
+                });
+            }
+        }
+        None
+    }
+
+    fn base(
+        &self,
+        signal: LinkSignal,
+        f: ColorFormat,
+        bpc: u8,
+        required: u64,
+        capacity: u64,
+        dsc: Option<u32>,
+    ) -> Choice {
+        Choice {
+            signal,
+            color_format: f,
+            bpc,
+            dsc_bpp_x16: dsc,
+            required_kbps: required,
+            capacity_kbps: capacity,
+            rejected: vec![],
+        }
+    }
+
+    fn fits(&self, f: ColorFormat, bpc: u8, dsc: bool) -> Result<Choice, Miss> {
+        let t = &self.t;
+        let px = t.pixel_clock_khz;
+        match self.link {
+            LinkKind::Virtual => Ok(self.base(
+                LinkSignal::Virtual,
+                f,
+                bpc,
+                budget::stream_kbps(px, f, bpc),
+                0,
+                None,
+            )),
+            LinkKind::Hdmi => self.hdmi(f, bpc, dsc),
+            LinkKind::DisplayPort { mst } => {
+                let dp = match (self.source.max_dp, self.sink.max_dp) {
+                    (Some(a), Some(b)) => DpLink {
+                        lanes: a.lanes.min(b.lanes),
+                        rate: a.rate.min(b.rate),
+                    },
+                    _ => return Err(("the DisplayPort link rate is unknown".into(), true)),
+                };
+                let mut cap = budget::dp_capacity_kbps(dp, mst);
+                let signal = LinkSignal::DisplayPort { link: dp };
+                if dsc {
+                    // DSC on 8b/10b links needs FEC (about 2.4%).
+                    if !matches!(dp.rate, DpRate::Uhbr10 | DpRate::Uhbr13_5 | DpRate::Uhbr20) {
+                        cap = cap * 976 / 1000;
+                    }
+                    let bpc = self.sink.dsc_max_bpc.map_or(bpc, |m| bpc.min(m));
+                    return match budget::dsc_bpp_x16(px, cap, f, bpc) {
+                        Some(bpp) => Ok(self.base(
+                            signal,
+                            f,
+                            bpc,
+                            u64::from(px) * u64::from(bpp) / 16,
+                            cap,
+                            Some(bpp),
+                        )),
+                        None => Err((
+                            format!("{} too slow even with DSC at 8 bpp", gbps(cap)),
+                            false,
+                        )),
+                    };
+                }
+                let need = link_stream_kbps(px, f, bpc, false);
+                if need <= cap {
+                    Ok(self.base(signal, f, bpc, need, cap, None))
+                } else {
+                    Err((
+                        format!(
+                            "DisplayPort {}×{:?} carries {}, needs {}",
+                            dp.lanes,
+                            dp.rate,
+                            gbps(cap),
+                            gbps(need)
+                        ),
+                        false,
+                    ))
+                }
+            }
+        }
+    }
+
+    fn hdmi(&self, f: ColorFormat, bpc: u8, dsc: bool) -> Result<Choice, Miss> {
+        let (t, source, sink) = (&self.t, self.source, self.sink);
+        let mut why = vec![];
+        let mut unknown = false;
+        if !dsc {
+            let limit = match (source.max_tmds_khz, sink.max_tmds_khz) {
                 (Some(a), Some(b)) => Some(a.min(b)),
                 (a, b) => a.or(b),
             };
-            let mut why = vec![];
-            if !dsc {
-                match (
-                    tmds_character_rate_khz(t.pixel_clock_khz, f, bpc),
-                    tmds_limit,
-                ) {
-                    (Some(rate), Some(limit)) if rate <= limit => {
-                        return Ok(base(
-                            LinkSignal::Tmds {
-                                character_rate_khz: rate,
-                            },
-                            budget::tmds_capacity_kbps(rate),
-                            budget::tmds_capacity_kbps(limit),
-                            None,
-                        ));
-                    }
-                    (Some(rate), Some(limit)) => {
-                        why.push(format!("TMDS needs {} (limit {})", mhz(rate), mhz(limit)))
-                    }
-                    (None, _) => why.push(format!("TMDS can't carry {} at {bpc} bits", name(f))),
-                    (Some(_), None) => why.push("TMDS limit unknown".into()),
+            match (tmds_character_rate_khz(t.pixel_clock_khz, f, bpc), limit) {
+                (Some(rate), Some(limit)) if rate <= limit => {
+                    return Ok(self.base(
+                        LinkSignal::Tmds {
+                            character_rate_khz: rate,
+                        },
+                        f,
+                        bpc,
+                        budget::tmds_capacity_kbps(rate),
+                        budget::tmds_capacity_kbps(limit),
+                        None,
+                    ));
                 }
-            }
-            // FRL.
-            let common = match (source.max_frl, sink.max_frl) {
-                (Some(a), Some(b)) => budget::common_frl(a, b),
-                _ => None,
-            };
-            let frl_why = match (&source.frl, common, sink.max_frl) {
-                (_, _, None) => Some("the sink has no FRL".to_string()),
-                (FrlGate::Unsupported, ..) => Some("the driver has no FRL support".into()),
-                (FrlGate::DisabledByDriver(w), ..) => {
-                    Some(format!("FRL is off in the driver ({w})"))
+                (Some(rate), Some(limit)) => {
+                    why.push(format!("TMDS needs {} (limit {})", mhz(rate), mhz(limit)));
                 }
-                (FrlGate::Unknown, ..) => Some("whether the driver has FRL on is unknown".into()),
-                (FrlGate::Enabled, None, _) => Some("no FRL rate common to both ends".into()),
-                (FrlGate::Enabled, Some(_), _) => None,
-            };
-            if let Some(w) = frl_why {
-                why.push(w);
-                return Err(why.join("; "));
-            }
-            let rate = common.expect("checked above");
-            let cap = frl_capacity_kbps(rate);
-            let need = frl_required_kbps(t, mode.width, mode.height, f, bpc);
-            if dsc {
-                let px = t.pixel_clock_khz;
-                return match budget::dsc_bpp_x16(px, cap, f, bpc) {
-                    Some(bpp) => Ok(base(
-                        LinkSignal::Frl { rate },
-                        u64::from(px) * u64::from(bpp) / 16,
-                        cap,
-                        Some(bpp),
-                    )),
-                    None => Err(format!(
-                        "{} too slow even with DSC at 8 bpp",
-                        frl_name(rate)
-                    )),
-                };
-            }
-            if need <= cap {
-                Ok(base(LinkSignal::Frl { rate }, need, cap, None))
-            } else {
-                why.push(format!(
-                    "{} carries {}, needs {}",
-                    frl_name(rate),
-                    gbps(cap),
-                    gbps(need)
-                ));
-                Err(why.join("; "))
+                (None, _) => why.push(format!("TMDS can't carry {} at {bpc} bits", name(f))),
+                (Some(_), None) => {
+                    why.push("the TMDS limit is unknown".into());
+                    unknown = true;
+                }
             }
         }
-        LinkKind::DisplayPort { mst } => {
-            let dp = match (source.max_dp, sink.max_dp) {
-                (Some(a), Some(b)) => Some(DpLink {
-                    lanes: a.lanes.min(b.lanes),
-                    rate: a.rate.min(b.rate),
-                }),
-                (a, b) => a.or(b),
-            };
-            let Some(dp) = dp else {
-                return Err("DisplayPort link rate unknown".into());
-            };
-            let cap = budget::dp_capacity_kbps(dp, mst);
-            let signal = LinkSignal::DisplayPort { link: dp };
-            if dsc {
-                let px = t.pixel_clock_khz;
-                return match budget::dsc_bpp_x16(px, cap, f, bpc) {
-                    Some(bpp) => Ok(base(
-                        signal,
-                        u64::from(px) * u64::from(bpp) / 16,
-                        cap,
-                        Some(bpp),
-                    )),
-                    None => Err(format!("{} too slow even with DSC at 8 bpp", gbps(cap))),
-                };
+        // FRL.
+        let frl_miss = match (&source.frl, sink.max_frl, source.max_frl) {
+            (_, None, _) => Some(("the sink has no FRL".to_string(), false)),
+            (FrlGate::Unsupported, ..) => Some(("the driver has no FRL support".into(), false)),
+            (FrlGate::DisabledByDriver(w), ..) => {
+                Some((format!("FRL is off in the driver ({w})"), false))
             }
-            let need = stream_kbps(t.pixel_clock_khz, f, bpc);
-            if need <= cap {
-                Ok(base(signal, need, cap, None))
-            } else {
-                Err(format!(
-                    "DisplayPort {}×{:?} carries {}, needs {}",
-                    dp.lanes,
-                    dp.rate,
-                    gbps(cap),
-                    gbps(need)
-                ))
+            (FrlGate::Unknown, ..) => {
+                Some(("whether the driver has FRL on is unknown".into(), true))
             }
+            (FrlGate::Enabled, _, None) => {
+                Some(("the GPU's highest FRL rate is unknown".into(), true))
+            }
+            (FrlGate::Enabled, Some(_), Some(_)) => None,
+        };
+        if let Some((w, u)) = frl_miss {
+            why.push(w);
+            return Err((why.join("; "), unknown || u));
+        }
+        let mut rate = budget::common_frl(
+            source.max_frl.expect("checked"),
+            sink.max_frl.expect("checked"),
+        )
+        .ok_or(("no FRL rate common to both ends".to_string(), false))?;
+        if dsc {
+            if let Some(d) = sink.dsc_max_frl {
+                rate = budget::common_frl(rate, d).unwrap_or(rate);
+            }
+            let cap = frl_capacity_kbps(rate);
+            let bpc = sink.dsc_max_bpc.map_or(bpc, |m| bpc.min(m));
+            let px = t.pixel_clock_khz;
+            return match budget::dsc_bpp_x16(px, cap, f, bpc) {
+                Some(bpp) => Ok(self.base(
+                    LinkSignal::Frl { rate },
+                    f,
+                    bpc,
+                    u64::from(px) * u64::from(bpp) / 16,
+                    cap,
+                    Some(bpp),
+                )),
+                None => Err((
+                    format!("{} too slow even with DSC at 8 bpp", frl_name(rate)),
+                    false,
+                )),
+            };
+        }
+        let cap = frl_capacity_kbps(rate);
+        let need = frl_required_kbps(t, self.mode.width, self.mode.height, f, bpc);
+        if need <= cap {
+            Ok(self.base(LinkSignal::Frl { rate }, f, bpc, need, cap, None))
+        } else {
+            why.push(format!(
+                "{} carries {}, needs {}",
+                frl_name(rate),
+                gbps(cap),
+                gbps(need)
+            ));
+            Err((why.join("; "), false))
         }
     }
 }
@@ -444,18 +535,18 @@ fn fits(
 mod tests {
     use super::*;
     use ColorFormat::*;
-    use displaycaps_model::{ModeSource, Timing, Ycbcr420};
+    use displaycaps_model::{ModeSource, Ycbcr420};
 
-    fn mode4k(clock: u32, refresh: u32) -> Mode {
+    fn mode(w: u16, h: u16, clock: u32, ht: u16, vt: u16, refresh: u32) -> Mode {
         Mode {
-            width: 3840,
-            height: 2160,
+            width: w,
+            height: h,
             refresh_millihz: refresh,
             interlaced: false,
             timing: Some(Timing {
                 pixel_clock_khz: clock,
-                h_total: 4400,
-                v_total: 2250,
+                h_total: ht,
+                v_total: vt,
                 h_sync_positive: Some(true),
                 v_sync_positive: Some(true),
             }),
@@ -465,6 +556,10 @@ mod tests {
             ycbcr420: Ycbcr420::Also,
             sources: vec![ModeSource::CtaVic],
         }
+    }
+
+    fn mode4k(clock: u32, refresh: u32) -> Mode {
+        mode(3840, 2160, clock, 4400, 2250, refresh)
     }
 
     /// An HDMI 2.0 TV (600 MHz, deep colour 10/12, 4:2:0 10/12) like the HTPC's Hisense.
@@ -501,7 +596,8 @@ mod tests {
             }),
             frl,
             max_dp: None,
-            dsc: true,
+            dsc: Some(true),
+            dsc_first: true,
         }
     }
 
@@ -513,8 +609,9 @@ mod tests {
     }
 
     #[test]
-    fn hdmi20_4k60_hdr_falls_back_to_420_10bit() {
-        // RGB 10 and 8... RGB 8 fits 594 MHz, so an automatic driver picks RGB 8 (bit depth lost).
+    fn hdmi20_4k60_hdr_drops_depth_not_chroma() {
+        // RGB 10 needs 742.5 MHz; an automatic driver lowers the depth before it subsamples:
+        // RGB 8 at 594 MHz.
         let c = choose(
             &mode4k(594_000, 60_000),
             LinkKind::Hdmi,
@@ -538,31 +635,24 @@ mod tests {
             r.reason
         );
         assert!(r.reason.contains("the sink has no FRL"), "{}", r.reason);
-        // Forcing 4:2:0 (color format, Linux 7.3+) keeps 10 bits.
-        let c = choose(
-            &mode4k(594_000, 60_000),
-            LinkKind::Hdmi,
-            &amd(FrlGate::Enabled),
-            &hdmi20_tv(),
-            Request {
-                max_bpc: 10,
-                color_format: Some(Ycbcr420),
-            },
-        )
-        .unwrap();
+        assert!(!c.uncertain());
+        // Forcing 4:2:0 (color format, Linux 7.3+) keeps 10 bits; 4:2:2 12-bit fits too.
+        let forced = |f, bpc| {
+            choose(
+                &mode4k(594_000, 60_000),
+                LinkKind::Hdmi,
+                &amd(FrlGate::Enabled),
+                &hdmi20_tv(),
+                Request {
+                    max_bpc: bpc,
+                    color_format: Some(f),
+                },
+            )
+            .unwrap()
+        };
+        let c = forced(Ycbcr420, 10);
         assert_eq!((c.color_format, c.bpc), (Ycbcr420, 10));
-        // 4:2:2 12-bit fits at 594 MHz too.
-        let c = choose(
-            &mode4k(594_000, 60_000),
-            LinkKind::Hdmi,
-            &amd(FrlGate::Enabled),
-            &hdmi20_tv(),
-            Request {
-                max_bpc: 12,
-                color_format: Some(Ycbcr422),
-            },
-        )
-        .unwrap();
+        let c = forced(Ycbcr422, 12);
         assert_eq!((c.color_format, c.bpc), (Ycbcr422, 12));
     }
 
@@ -582,7 +672,6 @@ mod tests {
 
     #[test]
     fn hdmi21_4k120_frl_off_falls_to_420_8bit() {
-        // The CachyOS case: FRL off by default → 4K120 only as 4:2:0 8-bit over TMDS.
         let off =
             FrlGate::DisabledByDriver("amdgpu before Linux 7.4 without dcfeaturemask 0x400".into());
         let c = choose(
@@ -605,7 +694,7 @@ mod tests {
                 .iter()
                 .any(|r| r.reason.contains("FRL is off in the driver"))
         );
-        // FRL on: RGB 10-bit over FRL 4×12.
+        assert!(!c.uncertain());
         let c = choose(
             &mode4k(1_188_000, 120_000),
             LinkKind::Hdmi,
@@ -628,8 +717,35 @@ mod tests {
     }
 
     #[test]
+    fn unknown_frl_makes_the_answer_a_lower_bound() {
+        let c = choose(
+            &mode4k(1_188_000, 120_000),
+            LinkKind::Hdmi,
+            &amd(FrlGate::Unknown),
+            &hdmi21_tv(),
+            auto(10),
+        )
+        .unwrap();
+        assert_eq!((c.color_format, c.bpc), (Ycbcr420, 8));
+        assert!(
+            c.uncertain(),
+            "RGB over FRL was rejected only for lack of knowledge"
+        );
+        let mut src = amd(FrlGate::Enabled);
+        src.max_frl = None;
+        let c = choose(
+            &mode4k(1_188_000, 120_000),
+            LinkKind::Hdmi,
+            &src,
+            &hdmi21_tv(),
+            auto(10),
+        )
+        .unwrap();
+        assert!(c.uncertain());
+    }
+
+    #[test]
     fn nothing_fits_explains_every_option() {
-        // 4K120 on an HDMI 2.0 TV without 4:2:0 for the mode: nothing.
         let mut tv = hdmi20_tv();
         tv.formats.retain(|(f, _)| *f != Ycbcr420);
         let e = choose(
@@ -651,33 +767,83 @@ mod tests {
     }
 
     #[test]
-    fn dp_dsc_and_virtual() {
+    fn dsc_order_follows_the_driver() {
+        // A 4K120 CVT-RB2 monitor (~1046 MHz) on 4×HBR3: 10-bit needs 31.4 Gbit/s, 8-bit 25.1.
         let hbr3 = DpLink {
             lanes: 4,
-            rate: displaycaps_model::DpRate::Hbr3,
+            rate: DpRate::Hbr3,
         };
-        let src = SourceLimits {
-            max_dp: Some(hbr3),
-            dsc: true,
-            ..amd(FrlGate::Unsupported)
-        };
+        let mut m = mode(3840, 2160, 1_046_000, 3920, 2222, 120_000);
+        m.ycbcr420 = Ycbcr420::No;
         let sink = SinkFormats {
             max_dp: Some(hbr3),
             dsc: true,
             ..hdmi20_tv()
         };
-        let mut m = mode4k(1_306_000, 144_000);
-        m.ycbcr420 = Ycbcr420::No;
+        let amdgpu = SourceLimits {
+            max_dp: Some(hbr3),
+            ..amd(FrlGate::Unsupported)
+        };
         let c = choose(
             &m,
             LinkKind::DisplayPort { mst: false },
-            &src,
+            &amdgpu,
             &sink,
             auto(10),
         )
         .unwrap();
-        assert_eq!((c.color_format, c.bpc), (Rgb, 10));
-        assert_eq!(c.dsc_bpp_x16.map(|b| b / 16), Some(19));
+        assert_eq!(
+            (c.color_format, c.bpc),
+            (Rgb, 10),
+            "amdgpu: DSC at the requested depth"
+        );
+        assert!(c.dsc_bpp_x16.is_some());
+        let i915 = SourceLimits {
+            dsc_first: false,
+            ..amdgpu
+        };
+        let c = choose(
+            &m,
+            LinkKind::DisplayPort { mst: false },
+            &i915,
+            &sink,
+            auto(10),
+        )
+        .unwrap();
+        assert_eq!(
+            (c.color_format, c.bpc, c.dsc_bpp_x16),
+            (Rgb, 8, None),
+            "i915: depth first"
+        );
+    }
+
+    #[test]
+    fn six_bit_panels_and_virtual() {
+        let hbr2 = DpLink {
+            lanes: 2,
+            rate: DpRate::Hbr2,
+        };
+        let panel = SinkFormats {
+            formats: vec![(Rgb, vec![6, 8])],
+            max_dp: Some(hbr2),
+            ..Default::default()
+        };
+        let src = SourceLimits {
+            max_dp: Some(hbr2),
+            dsc: Some(false),
+            dsc_first: false,
+            ..amd(FrlGate::Unsupported)
+        };
+        let m = mode(1920, 1080, 138_500, 2080, 1111, 60_000);
+        let c = choose(
+            &m,
+            LinkKind::DisplayPort { mst: false },
+            &src,
+            &panel,
+            auto(6),
+        )
+        .unwrap();
+        assert_eq!(c.bpc, 6);
         let v = choose(
             &mode4k(594_000, 60_000),
             LinkKind::Virtual,
@@ -687,5 +853,22 @@ mod tests {
         )
         .unwrap();
         assert_eq!(v.signal, LinkSignal::Virtual);
+        let e = choose(
+            &m,
+            LinkKind::DisplayPort { mst: false },
+            &SourceLimits {
+                max_dp: None,
+                ..src
+            },
+            &panel,
+            auto(8),
+        )
+        .unwrap_err();
+        // Every RGB option fails for lack of knowledge, none for bandwidth.
+        assert!(
+            e.iter()
+                .filter(|r| r.color_format == Rgb && !r.dsc)
+                .all(|r| r.unknown)
+        );
     }
 }

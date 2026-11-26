@@ -1,23 +1,34 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! The inferred link: what the HDMI or DisplayPort link carries for the active mode, worked out
-//! by `displaycaps-link` from the sink record, KMS (`max bpc`, `color format`), the driver's
-//! limits and feature gates, and the connector (adapters, MST). Every value is *inferred*.
+//! by `displaycaps-link` from the sink record, KMS (`max bpc`, `color format`, `subconnector`,
+//! `PATH`), the driver's feature gates and policy. Every value is *inferred*.
 //!
-//! Driver limits and gates are a small table here; they move to the declarative data packs with
-//! the rule engine (phase 7).
+//! What isn't known stays unknown: the GPU's own TMDS, FRL and DisplayPort limits aren't
+//! readable without privileges (per-ASIC tables arrive with the data packs in phase 7), so the
+//! sink's limits are used and the layer is `partial`; when a better format was rejected only for
+//! lack of knowledge, the format is reported unknown with both candidates named.
 
 use displaycaps_link::{FrlGate, LinkKind, Request, SinkFormats, SourceLimits};
 use displaycaps_model::{
     Availability, CapabilitySet, ChainDevice, ChainDeviceKind, ColorFormat, Confidence,
     ConnectorType, DriverFeature, FrlRate, KmsState, LayerCapabilities, LayerDetail, LayerKind,
-    LinkLimits, LinkState, Mode, ModuleParameter, Provenance, RejectedFormat, SinkRecord, Source,
-    UnknownReason, Value, Ycbcr420,
+    LinkLimits, LinkSignal, LinkState, Mode, ModuleParameter, Provenance, RejectedFormat,
+    SinkRecord, Source, UnknownReason, Value, Ycbcr420,
 };
 
 /// Kernel version `(major, minor)` from a release string like `7.2.3-arch1-1`.
 pub(crate) fn kernel_version(release: &str) -> Option<(u32, u32)> {
     let mut it = release.split(|c: char| !c.is_ascii_digit());
     Some((it.next()?.parse().ok()?, it.next()?.parse().ok()?))
+}
+
+/// The driver name the tables use: the proprietary NVIDIA driver calls itself `nvidia-drm` in
+/// KMS and binds the PCI device as `nvidia`.
+pub(crate) fn normalize_driver(name: &str) -> &str {
+    match name {
+        "nvidia-drm" | "nvidia_drm" => "nvidia",
+        n => n,
+    }
 }
 
 fn param<'a>(params: &'a [ModuleParameter], name: &str) -> Option<&'a str> {
@@ -38,33 +49,38 @@ fn parse_mask(v: &str) -> Option<u64> {
 /// amdgpu's `dcfeaturemask` bit that turns HDMI FRL on in Linux 7.2 and 7.3.
 const AMDGPU_DC_FRL: u64 = 0x400;
 
+/// The module parameters the link layer needs (read for it even without driver detail in scope).
+pub(crate) const LINK_PARAMETERS: [&str; 1] = ["amdgpu.dcfeaturemask"];
+
 /// Whether the driver has HDMI 2.1 FRL on.
 ///
 /// - amdgpu: FRL arrived in Linux 7.2, off unless `dcfeaturemask` has bit 0x400; on by default
-///   since Linux 7.4 (sources: Phoronix, "Initial AMDGPU HDMI 2.1 FRL support merged for Linux
-///   7.2" and "Patches ready for AMDGPU HDMI 2.1 enabled by default with Linux 7.4").
+///   since Linux 7.4 (Phoronix, "Initial AMDGPU HDMI 2.1 FRL support merged for Linux 7.2" and
+///   "Patches ready for AMDGPU HDMI 2.1 enabled by default with Linux 7.4"). A kernel below 7.2
+///   with the bit set may be a distribution backport: unknown.
 /// - i915, xe, nouveau: no native HDMI FRL.
-/// - nvidia: the proprietary driver supports FRL on HDMI 2.1 hardware; which board this is isn't
-///   known here, so unknown.
+/// - nvidia: depends on the board: unknown.
 pub(crate) fn frl_gate(
     driver: Option<&str>,
     kernel: Option<(u32, u32)>,
     params: &[ModuleParameter],
 ) -> FrlGate {
-    match driver {
+    let mask = param(params, "amdgpu.dcfeaturemask").and_then(parse_mask);
+    match driver.map(normalize_driver) {
         Some("amdgpu") => match kernel {
             None => FrlGate::Unknown,
-            Some(k) if k < (7, 2) => FrlGate::Unsupported,
-            Some(k) if k < (7, 4) => {
-                match param(params, "amdgpu.dcfeaturemask").and_then(parse_mask) {
-                    Some(m) if m & AMDGPU_DC_FRL != 0 => FrlGate::Enabled,
-                    Some(_) => FrlGate::DisabledByDriver(format!(
-                        "amdgpu on Linux {}.{} turns FRL on only with dcfeaturemask bit 0x400",
-                        k.0, k.1
-                    )),
-                    None => FrlGate::Unknown,
-                }
-            }
+            Some(k) if k < (7, 2) => match mask {
+                Some(m) if m & AMDGPU_DC_FRL != 0 => FrlGate::Unknown,
+                _ => FrlGate::Unsupported,
+            },
+            Some(k) if k < (7, 4) => match mask {
+                Some(m) if m & AMDGPU_DC_FRL != 0 => FrlGate::Enabled,
+                Some(_) => FrlGate::DisabledByDriver(format!(
+                    "amdgpu on Linux {}.{} turns FRL on only with dcfeaturemask bit 0x400",
+                    k.0, k.1
+                )),
+                None => FrlGate::Unknown,
+            },
             Some(_) => FrlGate::Enabled,
         },
         Some("i915" | "xe" | "nouveau") => FrlGate::Unsupported,
@@ -72,26 +88,18 @@ pub(crate) fn frl_gate(
     }
 }
 
-/// The source's link limits for a driver. `None` for a driver this table doesn't know.
-pub(crate) fn source_limits(driver: Option<&str>, frl: FrlGate) -> Option<SourceLimits> {
-    let frl48 = Some(FrlRate {
-        lanes: 4,
-        gbps_per_lane: 12,
-    });
-    let (tmds, max_frl, dsc) = match driver? {
-        "amdgpu" => (600_000, frl48, true),
-        "nvidia" => (600_000, frl48, true),
-        "i915" | "xe" => (594_000, None, true),
-        "nouveau" => (600_000, None, false),
-        _ => return None,
-    };
-    Some(SourceLimits {
-        max_tmds_khz: Some(tmds),
-        max_frl,
+/// The source's limits for a driver. The GPU's own TMDS, FRL and DisplayPort limits are not
+/// known here; only the driver's policy is.
+pub(crate) fn source_limits(driver: Option<&str>, frl: FrlGate) -> SourceLimits {
+    SourceLimits {
+        max_tmds_khz: None,
+        max_frl: None,
         frl,
         max_dp: None,
-        dsc,
-    })
+        dsc: None,
+        // amdgpu turns DSC on at the requested depth before it lowers the depth.
+        dsc_first: driver.map(normalize_driver) == Some("amdgpu"),
+    }
 }
 
 /// The `hdmi_frl` driver feature for the driver detail.
@@ -112,20 +120,50 @@ pub(crate) fn frl_feature(gate: &FrlGate, at: u64) -> Option<DriverFeature> {
     })
 }
 
+/// An HDMI sink: its EDID has an HDMI (or HDMI Forum) VSDB, which gives it a TMDS limit.
+fn is_hdmi_sink(s: &SinkRecord) -> bool {
+    s.link
+        .known()
+        .is_some_and(|l| l.max_tmds_character_rate_khz.is_some() || l.max_frl.is_some())
+}
+
+/// Whether a DisplayPort connector carries HDMI through an adapter, and how sure that is.
+/// `subconnector` is the KMS `subconnector` property (`HDMI`, `Native`, `Unknown`, ...).
+fn adapter(
+    connector: &ConnectorType,
+    subconnector: Option<&str>,
+    sink: Option<&SinkRecord>,
+) -> Option<(Confidence, &'static str)> {
+    if !matches!(connector, ConnectorType::DisplayPort | ConnectorType::UsbC) {
+        return None;
+    }
+    match subconnector {
+        Some("HDMI") => Some((Confidence::Measured, "the DisplayPort subconnector is HDMI")),
+        Some("Native" | "DisplayPort" | "DP") => None,
+        // No subconnector: an HDMI VSDB hints at an adapter, but monitors that serve one EDID on
+        // every input carry one too.
+        _ if sink.is_some_and(is_hdmi_sink) => Some((
+            Confidence::Inferred,
+            "HDMI sink EDID on a DisplayPort connector (no subconnector to confirm)",
+        )),
+        _ => None,
+    }
+}
+
 /// Devices the connector reveals between the GPU and the sink.
 pub(crate) fn chain(
     connector: &ConnectorType,
+    subconnector: Option<&str>,
     sink: Option<&SinkRecord>,
     mst: bool,
 ) -> Vec<ChainDevice> {
     let mut out = vec![];
-    let hdmi_sink = sink.is_some_and(is_hdmi_sink);
-    if matches!(connector, ConnectorType::DisplayPort | ConnectorType::UsbC) && hdmi_sink {
+    if let Some((confidence, why)) = adapter(connector, subconnector, sink) {
         out.push(ChainDevice {
             kind: ChainDeviceKind::Adapter,
             identity: None,
-            confidence: Confidence::Inferred,
-            evidence: "HDMI sink EDID on a DisplayPort connector".into(),
+            confidence,
+            evidence: why.into(),
         });
     }
     if mst {
@@ -137,13 +175,6 @@ pub(crate) fn chain(
         });
     }
     out
-}
-
-/// An HDMI sink: its EDID states an HDMI TMDS limit (HDMI or HDMI Forum VSDB).
-fn is_hdmi_sink(s: &SinkRecord) -> bool {
-    s.link
-        .known()
-        .is_some_and(|l| l.max_tmds_character_rate_khz.is_some() || l.max_frl.is_some())
 }
 
 /// What the sink accepts for `mode` (its formats and depths, 4:2:0 as the mode allows).
@@ -205,20 +236,39 @@ fn sink_formats(sink: &SinkRecord, mode: &Mode) -> SinkFormats {
         max_frl: limits.max_frl,
         max_dp: limits.max_dp,
         dsc: limits.dsc.is_some(),
+        dsc_max_frl: limits.dsc.as_ref().and_then(|d| d.max_frl),
+        dsc_max_bpc: limits.dsc.as_ref().and_then(|d| d.max_bpc),
     }
 }
 
 /// Everything the link layer of one endpoint is worked out from.
 pub(crate) struct Inputs<'a> {
     pub connector: &'a ConnectorType,
+    /// KMS `subconnector` (DisplayPort), when the driver has it.
+    pub subconnector: Option<&'a str>,
     pub sink: Option<&'a SinkRecord>,
     /// KMS state with every field (read for the link whatever the field scope).
     pub kms: Option<&'a KmsState>,
     pub mst: bool,
     pub driver: Option<&'a str>,
     pub frl: FrlGate,
+    /// Source limits from a simulation, instead of the (unknown) live ones.
+    pub source: Option<SourceLimits>,
     pub with_detail: bool,
     pub now: u64,
+}
+
+fn fmt_name(f: ColorFormat) -> &'static str {
+    match f {
+        ColorFormat::Rgb => "RGB",
+        ColorFormat::Ycbcr444 => "YCbCr 4:4:4",
+        ColorFormat::Ycbcr422 => "YCbCr 4:2:2",
+        ColorFormat::Ycbcr420 => "YCbCr 4:2:0",
+    }
+}
+
+fn unknown_value<T>(d: &str) -> Value<T> {
+    Value::unknown(UnknownReason::NotExposed, d.to_string())
 }
 
 /// The link layer for one endpoint.
@@ -235,19 +285,18 @@ pub(crate) fn link_layer(i: &Inputs<'_>) -> LayerCapabilities {
     let prov = Provenance {
         layer: LayerKind::Link,
         source: Source::derived(
-            "active mode, max bpc and color format (KMS), sink EDID, driver limits",
+            "active mode, max bpc and color format (KMS), sink EDID, driver policy",
         ),
         read_at_ms: i.now,
     };
-    let adapter = matches!(
-        i.connector,
-        ConnectorType::DisplayPort | ConnectorType::UsbC
-    ) && i.sink.is_some_and(is_hdmi_sink);
+    let adapter = adapter(i.connector, i.subconnector, i.sink);
     let mut limited_by = vec![];
+    let mut partial = false;
     let kind = match i.connector {
         ConnectorType::Hdmi => LinkKind::Hdmi,
-        ConnectorType::DisplayPort | ConnectorType::UsbC if adapter => {
+        ConnectorType::DisplayPort | ConnectorType::UsbC if adapter.is_some() => {
             limited_by.push("DP-to-HDMI adapter (its TMDS limit is not known)".to_string());
+            partial = true;
             LinkKind::Hdmi
         }
         ConnectorType::DisplayPort | ConnectorType::UsbC | ConnectorType::Edp => {
@@ -282,28 +331,27 @@ pub(crate) fn link_layer(i: &Inputs<'_>) -> LayerCapabilities {
         (_, Some(s)) => sink_formats(s, &mode),
         (_, None) => return unknown(UnknownReason::NotExposed, "the link needs the sink's EDID"),
     };
-    let mut source = match (kind, source_limits(i.driver, i.frl.clone())) {
-        (LinkKind::Virtual, _) => SourceLimits {
-            max_tmds_khz: None,
-            max_frl: None,
-            frl: FrlGate::Unsupported,
-            max_dp: None,
-            dsc: false,
-        },
-        (_, Some(s)) => s,
-        (_, None) => SourceLimits {
-            max_tmds_khz: None,
-            max_frl: None,
-            frl: i.frl.clone(),
-            max_dp: None,
-            dsc: false,
-        },
-    };
-    if adapter {
-        // The adapter, not the GPU, sets the TMDS limit, and it doesn't do FRL unless it is a PCON
-        // we can't see.
+    let mut source = i
+        .source
+        .clone()
+        .unwrap_or_else(|| source_limits(i.driver, i.frl.clone()));
+    if matches!(kind, LinkKind::DisplayPort { .. })
+        && (source.max_dp.is_none() || sink.max_dp.is_none())
+    {
+        // DP link rates live in the DPCD (and the driver's debugfs), neither readable here.
+        return unknown(
+            UnknownReason::NotExposed,
+            "the DisplayPort link rate needs the DPCD, which isn't readable without privileges",
+        );
+    }
+    if adapter.is_some() {
+        // The adapter, not the GPU, sets the TMDS limit; FRL only if it's a PCON we can't see.
         source.max_tmds_khz = None;
         source.frl = FrlGate::Unknown;
+    }
+    if kind == LinkKind::Hdmi && source.max_tmds_khz.is_none() {
+        limited_by.push("the GPU's TMDS limit is not known: the sink's is used".to_string());
+        partial = true;
     }
     let req = Request {
         // Drivers without `max bpc` send 8 bits.
@@ -333,184 +381,82 @@ pub(crate) fn link_layer(i: &Inputs<'_>) -> LayerCapabilities {
         link: Some(Value::inferred(effective, prov.clone())),
         ..Default::default()
     };
-    let rejected = |v: Vec<displaycaps_link::Rejected>| -> Vec<RejectedFormat> {
-        v.into_iter()
+    let rejected = |v: &[displaycaps_link::Rejected]| -> Vec<RejectedFormat> {
+        v.iter()
             .map(|r| RejectedFormat {
                 color_format: r.color_format,
                 bit_depth: r.bpc,
                 dsc: r.dsc,
-                reason: r.reason,
+                reason: r.reason.clone(),
             })
             .collect()
     };
-    match displaycaps_link::choose(&mode, kind, &source, &sink, req) {
-        Ok(c) => {
-            let dp_unknown = matches!(kind, LinkKind::DisplayPort { .. }) && c.capacity_kbps == 0;
-            let state = LinkState {
+    let unknown_state = |d: &str, limited_by: Vec<String>, rej: Vec<RejectedFormat>| LinkState {
+        signal: unknown_value(d),
+        color_format: unknown_value(d),
+        bit_depth: unknown_value(d),
+        range: None,
+        dsc: None,
+        required_kbps: unknown_value(d),
+        capacity_kbps: unknown_value(d),
+        limited_by,
+        rejected: rej,
+    };
+    let (state, availability) = match displaycaps_link::choose(&mode, kind, &source, &sink, req) {
+        Ok(c) if c.uncertain() => {
+            // A better format was rejected only for lack of knowledge: name both candidates.
+            let better = c.rejected.iter().find(|r| r.unknown).expect("uncertain");
+            let cause = better.reason.rsplit("; ").next().unwrap_or(&better.reason);
+            let d = format!(
+                "{} {}-bit if it were known ({cause}); otherwise {} {}-bit",
+                fmt_name(better.color_format),
+                better.bpc,
+                fmt_name(c.color_format),
+                c.bpc
+            );
+            (
+                unknown_state(&d, limited_by, rejected(&c.rejected)),
+                Availability::Partial,
+            )
+        }
+        Ok(c) => (
+            LinkState {
                 signal: Value::inferred(c.signal.clone(), prov.clone()),
                 color_format: Value::inferred(c.color_format, prov.clone()),
                 bit_depth: Value::inferred(c.bpc, prov.clone()),
                 range: None,
                 dsc: Some(Value::inferred(c.dsc_bpp_x16.is_some(), prov.clone())),
                 required_kbps: Value::inferred(c.required_kbps, prov.clone()),
-                capacity_kbps: if dp_unknown || kind == LinkKind::Virtual {
-                    Value::unknown(UnknownReason::NotExposed, "no link capacity".to_string())
+                capacity_kbps: if c.signal == LinkSignal::Virtual {
+                    unknown_value("a virtual output has no link")
                 } else {
                     Value::inferred(c.capacity_kbps, prov.clone())
                 },
                 limited_by,
-                rejected: rejected(c.rejected),
-            };
-            LayerCapabilities {
-                layer: LayerKind::Link,
-                availability: Availability::Read,
-                caps,
-                detail: i.with_detail.then_some(LayerDetail::Link(state)),
-            }
-        }
+                rejected: rejected(&c.rejected),
+            },
+            if partial {
+                Availability::Partial
+            } else {
+                Availability::Read
+            },
+        ),
         Err(all) => {
             let why = all
                 .first()
                 .map(|r| r.reason.clone())
                 .unwrap_or_else(|| "no format fits".into());
-            fn u<T>(d: &str) -> Value<T> {
-                Value::unknown(UnknownReason::NotExposed, d.to_string())
-            }
-            let state = LinkState {
-                signal: u(&why),
-                color_format: u(&why),
-                bit_depth: u(&why),
-                range: None,
-                dsc: None,
-                required_kbps: u(&why),
-                capacity_kbps: u(&why),
-                limited_by,
-                rejected: rejected(all),
-            };
-            LayerCapabilities {
-                layer: LayerKind::Link,
-                availability: Availability::Partial,
-                caps,
-                detail: i.with_detail.then_some(LayerDetail::Link(state)),
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn p(name: &str, v: &str) -> ModuleParameter {
-        ModuleParameter {
-            name: name.into(),
-            value: v.into(),
-        }
-    }
-
-    fn htpc(mode: (u16, u16, u32), kernel: &str, mask: &str, sim_frl: bool) -> LinkState {
-        let edid = std::fs::read(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/parity/edid/hisense-55qd5n.bin"
-        ))
-        .unwrap();
-        let sc = Scenario {
-            edid,
-            mode,
-            connector: ConnectorType::Hdmi,
-            driver: "amdgpu".into(),
-            kernel: kernel.into(),
-            params: vec![("amdgpu.dcfeaturemask".into(), mask.into())],
-            max_bpc: 10,
-            color_format: None,
-            sink_frl: sim_frl.then_some(FrlRate {
-                lanes: 4,
-                gbps_per_lane: 12,
-            }),
-            sink_vics: if sim_frl { vec![118] } else { vec![] },
-        };
-        match explain(&sc).unwrap().detail {
-            Some(LayerDetail::Link(l)) => l,
-            other => panic!("{other:?}"),
-        }
-    }
-
-    /// Phase 4 gate, simulated (the HTPC is out of scope): the HTPC's TV (its real EDID, HDMI
-    /// 2.0) and an RX 9070 XT on amdgpu, with FRL off and on.
-    #[test]
-    fn htpc_4k_fallbacks_explained() {
-        use displaycaps_model::LinkSignal;
-        let fmt = |l: &LinkState| {
             (
-                *l.color_format.known().unwrap(),
-                *l.bit_depth.known().unwrap(),
+                unknown_state(&why, limited_by, rejected(&all)),
+                Availability::Partial,
             )
-        };
-        // The real TV, 4K60 HDR: 10-bit RGB needs 742.5 MHz; the TV has no FRL whatever the driver
-        // does, so the driver drops to 8 bits.
-        for kernel in ["7.2.3", "7.4.0"] {
-            let l = htpc((3840, 2160, 60_000), kernel, "0x402", false);
-            assert_eq!(fmt(&l), (ColorFormat::Rgb, 8));
-            assert!(
-                l.rejected[0].reason.contains("742.5 MHz")
-                    && l.rejected[0].reason.contains("the sink has no FRL")
-            );
         }
-        // 4K 23.976: 10-bit RGB fits HDMI 2.0.
-        let l = htpc((3840, 2160, 23_976), "7.2.3", "0x2", false);
-        assert_eq!(fmt(&l), (ColorFormat::Rgb, 10));
-        assert!(l.rejected.is_empty());
-        // A simulated HDMI 2.1 TV (48 Gbit/s FRL, 4K120): FRL off → 4:2:0 8-bit over TMDS ...
-        let l = htpc((3840, 2160, 120_000), "7.2.3", "0x2", true);
-        assert_eq!(fmt(&l), (ColorFormat::Ycbcr420, 8));
-        assert_eq!(
-            l.signal.known(),
-            Some(&LinkSignal::Tmds {
-                character_rate_khz: 594_000
-            })
-        );
-        assert!(
-            l.rejected
-                .iter()
-                .any(|r| r.reason.contains("dcfeaturemask bit 0x400"))
-        );
-        // ... FRL on (the mask bit, or Linux 7.4) → RGB 10-bit over FRL.
-        for (k, m) in [("7.2.3", "0x402"), ("7.4.0", "0x2")] {
-            let l = htpc((3840, 2160, 120_000), k, m, true);
-            assert_eq!(fmt(&l), (ColorFormat::Rgb, 10));
-            assert!(matches!(l.signal.known(), Some(LinkSignal::Frl { .. })));
-            assert!(l.rejected.is_empty());
-        }
-    }
-
-    #[test]
-    fn amdgpu_frl_gate() {
-        let d = Some("amdgpu");
-        assert_eq!(frl_gate(d, Some((7, 1)), &[]), FrlGate::Unsupported);
-        assert!(matches!(
-            frl_gate(d, Some((7, 2)), &[p("amdgpu.dcfeaturemask", "2")]),
-            FrlGate::DisabledByDriver(_)
-        ));
-        assert_eq!(
-            frl_gate(d, Some((7, 3)), &[p("amdgpu.dcfeaturemask", "1026")]),
-            FrlGate::Enabled
-        );
-        assert_eq!(
-            frl_gate(d, Some((7, 3)), &[p("amdgpu.dcfeaturemask", "0x402")]),
-            FrlGate::Enabled
-        );
-        assert_eq!(frl_gate(d, Some((7, 3)), &[]), FrlGate::Unknown);
-        assert_eq!(frl_gate(d, Some((7, 4)), &[]), FrlGate::Enabled);
-        assert_eq!(
-            frl_gate(Some("i915"), Some((7, 4)), &[]),
-            FrlGate::Unsupported
-        );
-        assert_eq!(
-            frl_gate(Some("nvidia"), Some((7, 4)), &[]),
-            FrlGate::Unknown
-        );
-        assert_eq!(kernel_version("7.2.3-arch1-1"), Some((7, 2)));
-        assert_eq!(kernel_version("6.12.117+deb13-amd64"), Some((6, 12)));
+    };
+    LayerCapabilities {
+        layer: LayerKind::Link,
+        availability,
+        caps,
+        detail: i.with_detail.then_some(LayerDetail::Link(state)),
     }
 }
 
@@ -525,16 +471,24 @@ pub struct Scenario {
     pub mode: (u16, u16, u32),
     /// Connector type.
     pub connector: ConnectorType,
+    /// KMS `subconnector` (DisplayPort).
+    pub subconnector: Option<String>,
     /// Source driver, e.g. `amdgpu`.
     pub driver: String,
     /// Kernel release, e.g. `7.3.0`.
     pub kernel: String,
     /// Module parameters as `module.name = value`.
     pub params: Vec<(String, String)>,
-    /// KMS `max bpc`.
-    pub max_bpc: u8,
+    /// KMS `max bpc`; `None` when the driver has no such property.
+    pub max_bpc: Option<u8>,
     /// KMS `color format`, `None` for automatic.
     pub color_format: Option<ColorFormat>,
+    /// The GPU's TMDS limit (kHz), simulated.
+    pub source_tmds_khz: Option<u32>,
+    /// The GPU's FRL rate, simulated.
+    pub source_frl: Option<FrlRate>,
+    /// Whether the GPU does DSC, simulated.
+    pub source_dsc: Option<bool>,
     /// Simulate a sink with this FRL rate (the EDID's own is used otherwise).
     pub sink_frl: Option<FrlRate>,
     /// Simulate a sink that also lists these CTA-861 VICs (4:2:0 allowed for them).
@@ -615,7 +569,7 @@ pub fn explain(s: &Scenario) -> Result<LayerCapabilities, String> {
     };
     let kms = KmsState {
         active_mode: Value::measured(Some(mode), prov.clone()),
-        max_bpc: Some(Value::measured(s.max_bpc, prov.clone())),
+        max_bpc: s.max_bpc.map(|b| Value::measured(b, prov.clone())),
         colorspace: None,
         color_format: s.color_format.map(|f| Value::measured(f, prov.clone())),
         hdr_output_metadata: None,
@@ -635,14 +589,251 @@ pub fn explain(s: &Scenario) -> Result<LayerCapabilities, String> {
         })
         .collect();
     let frl = frl_gate(Some(&s.driver), kernel_version(&s.kernel), &params);
+    let mut source = source_limits(Some(&s.driver), frl.clone());
+    source.max_tmds_khz = s.source_tmds_khz;
+    source.max_frl = s.source_frl;
+    source.dsc = s.source_dsc;
     Ok(link_layer(&Inputs {
         connector: &s.connector,
+        subconnector: s.subconnector.as_deref(),
         sink: Some(&sink),
         kms: Some(&kms),
         mst: false,
         driver: Some(&s.driver),
         frl,
+        source: Some(source),
         with_detail: true,
         now: 0,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(name: &str, v: &str) -> ModuleParameter {
+        ModuleParameter {
+            name: name.into(),
+            value: v.into(),
+        }
+    }
+
+    fn edid() -> Vec<u8> {
+        std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/parity/edid/hisense-55qd5n.bin"
+        ))
+        .unwrap()
+    }
+
+    /// The HTPC: an RX 9070 XT on amdgpu, simulated as 600 MHz TMDS, FRL 4×12 and DSC (the GPU's
+    /// limits can't be read; these are an assumption for the simulation).
+    fn htpc() -> Scenario {
+        Scenario {
+            edid: edid(),
+            mode: (3840, 2160, 60_000),
+            connector: ConnectorType::Hdmi,
+            subconnector: None,
+            driver: "amdgpu".into(),
+            kernel: "7.4.0".into(),
+            params: vec![("amdgpu.dcfeaturemask".into(), "0x2".into())],
+            max_bpc: Some(10),
+            color_format: None,
+            source_tmds_khz: Some(600_000),
+            source_frl: Some(FrlRate {
+                lanes: 4,
+                gbps_per_lane: 12,
+            }),
+            source_dsc: Some(true),
+            sink_frl: None,
+            sink_vics: vec![],
+        }
+    }
+
+    fn run(s: &Scenario) -> (Availability, LinkState) {
+        let l = explain(s).unwrap();
+        match l.detail {
+            Some(LayerDetail::Link(d)) => (l.availability, d),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    fn fmt(l: &LinkState) -> (ColorFormat, u8) {
+        (
+            *l.color_format.known().unwrap(),
+            *l.bit_depth.known().unwrap(),
+        )
+    }
+
+    /// Phase 4 gate, simulated (the HTPC is out of scope): the HTPC's TV (its real EDID, HDMI
+    /// 2.0) and the HTPC's GPU on amdgpu, with FRL off and on; then a simulated HDMI 2.1 TV (the
+    /// same EDID with FRL 4×12 and VIC 118 added) where FRL decides 4K120.
+    #[test]
+    fn htpc_4k_fallbacks_explained() {
+        // The real TV, 4K60 HDR: 10-bit RGB needs 742.5 MHz and the TV has no FRL, so the driver
+        // drops to 8 bits whether FRL is on (7.4) or off (7.2).
+        for kernel in ["7.2.3", "7.4.0"] {
+            let (a, l) = run(&Scenario {
+                kernel: kernel.into(),
+                ..htpc()
+            });
+            assert_eq!(a, Availability::Read);
+            assert_eq!(fmt(&l), (ColorFormat::Rgb, 8));
+            assert!(
+                l.rejected[0].reason.contains("742.5 MHz")
+                    && l.rejected[0].reason.contains("the sink has no FRL")
+            );
+        }
+        // Forced 4:2:0 (color format) keeps 10 bits; 4K 23.976 fits 10-bit RGB.
+        let (_, l) = run(&Scenario {
+            color_format: Some(ColorFormat::Ycbcr420),
+            ..htpc()
+        });
+        assert_eq!(fmt(&l), (ColorFormat::Ycbcr420, 10));
+        let (_, l) = run(&Scenario {
+            mode: (3840, 2160, 23_976),
+            ..htpc()
+        });
+        assert_eq!(fmt(&l), (ColorFormat::Rgb, 10));
+        assert!(l.rejected.is_empty());
+        // The simulated HDMI 2.1 TV at 4K120.
+        let tv21 = Scenario {
+            mode: (3840, 2160, 120_000),
+            sink_frl: Some(FrlRate {
+                lanes: 4,
+                gbps_per_lane: 12,
+            }),
+            sink_vics: vec![118],
+            ..htpc()
+        };
+        // FRL off (Linux 7.2 without the mask bit): 4:2:0 8-bit over TMDS, and why.
+        let (a, l) = run(&Scenario {
+            kernel: "7.2.3".into(),
+            ..tv21.clone()
+        });
+        assert_eq!(a, Availability::Read);
+        assert_eq!(fmt(&l), (ColorFormat::Ycbcr420, 8));
+        assert_eq!(
+            l.signal.known(),
+            Some(&LinkSignal::Tmds {
+                character_rate_khz: 594_000
+            })
+        );
+        assert!(
+            l.rejected
+                .iter()
+                .any(|r| r.reason.contains("dcfeaturemask bit 0x400"))
+        );
+        // FRL on (the mask bit, or Linux 7.4): RGB 10-bit over FRL.
+        for (k, m) in [("7.2.3", "0x402"), ("7.4.0", "0x2")] {
+            let (_, l) = run(&Scenario {
+                kernel: k.into(),
+                params: vec![("amdgpu.dcfeaturemask".into(), m.into())],
+                ..tv21.clone()
+            });
+            assert_eq!(fmt(&l), (ColorFormat::Rgb, 10));
+            assert!(matches!(l.signal.known(), Some(LinkSignal::Frl { .. })));
+            assert!(l.rejected.is_empty());
+        }
+        // FRL state unknown (amdgpu 7.3 with the mask unreadable): no guess, both candidates.
+        let (a, l) = run(&Scenario {
+            kernel: "7.3.1".into(),
+            params: vec![],
+            ..tv21.clone()
+        });
+        assert_eq!(a, Availability::Partial);
+        assert!(l.color_format.known().is_none());
+        let d = format!("{:?}", l.color_format);
+        assert!(
+            d.contains("RGB 10-bit if it were known") && d.contains("otherwise YCbCr 4:2:0 8-bit"),
+            "{d}"
+        );
+        // The GPU's limits unknown (the live case): the sink's TMDS limit is used, partial.
+        let (a, l) = run(&Scenario {
+            source_tmds_khz: None,
+            ..htpc()
+        });
+        assert_eq!(a, Availability::Partial);
+        assert_eq!(fmt(&l), (ColorFormat::Rgb, 8));
+        assert!(
+            l.limited_by
+                .iter()
+                .any(|x| x.contains("TMDS limit is not known"))
+        );
+        // No max bpc property: 8 bits.
+        let (_, l) = run(&Scenario {
+            max_bpc: None,
+            mode: (3840, 2160, 23_976),
+            ..htpc()
+        });
+        assert_eq!(fmt(&l), (ColorFormat::Rgb, 8));
+    }
+
+    #[test]
+    fn dp_and_adapters() {
+        // DisplayPort: the link rate needs the DPCD: unknown, no made-up rejections.
+        let l = explain(&Scenario {
+            connector: ConnectorType::DisplayPort,
+            subconnector: Some("Native".into()),
+            ..htpc()
+        })
+        .unwrap();
+        assert!(matches!(
+            l.availability,
+            Availability::Unknown {
+                reason: UnknownReason::NotExposed,
+                ..
+            }
+        ));
+        // An HDMI subconnector on DP: an adapter, HDMI maths, partial.
+        let (a, l) = run(&Scenario {
+            connector: ConnectorType::DisplayPort,
+            subconnector: Some("HDMI".into()),
+            ..htpc()
+        });
+        assert_eq!(a, Availability::Partial);
+        assert!(l.limited_by.iter().any(|x| x.contains("adapter")));
+        let devs = chain(&ConnectorType::DisplayPort, Some("HDMI"), None, false);
+        assert_eq!(
+            (devs[0].kind, devs[0].confidence),
+            (ChainDeviceKind::Adapter, Confidence::Measured)
+        );
+        assert!(chain(&ConnectorType::DisplayPort, Some("Native"), None, false).is_empty());
+    }
+
+    #[test]
+    fn amdgpu_frl_gate() {
+        let d = Some("amdgpu");
+        assert_eq!(frl_gate(d, Some((7, 1)), &[]), FrlGate::Unsupported);
+        assert_eq!(
+            frl_gate(d, Some((7, 1)), &[p("amdgpu.dcfeaturemask", "0x400")]),
+            FrlGate::Unknown,
+            "a backport?"
+        );
+        assert!(matches!(
+            frl_gate(d, Some((7, 2)), &[p("amdgpu.dcfeaturemask", "2")]),
+            FrlGate::DisabledByDriver(_)
+        ));
+        assert_eq!(
+            frl_gate(d, Some((7, 3)), &[p("amdgpu.dcfeaturemask", "1026")]),
+            FrlGate::Enabled
+        );
+        assert_eq!(
+            frl_gate(d, Some((7, 3)), &[p("amdgpu.dcfeaturemask", "0x402")]),
+            FrlGate::Enabled
+        );
+        assert_eq!(frl_gate(d, Some((7, 3)), &[]), FrlGate::Unknown);
+        assert_eq!(frl_gate(d, Some((7, 4)), &[]), FrlGate::Enabled);
+        assert_eq!(
+            frl_gate(Some("i915"), Some((7, 4)), &[]),
+            FrlGate::Unsupported
+        );
+        assert_eq!(
+            frl_gate(Some("nvidia-drm"), Some((7, 4)), &[]),
+            FrlGate::Unknown
+        );
+        assert_eq!(normalize_driver("nvidia-drm"), "nvidia");
+        assert_eq!(kernel_version("7.2.3-arch1-1"), Some((7, 2)));
+        assert_eq!(kernel_version("6.12.117+deb13-amd64"), Some((6, 12)));
+    }
 }

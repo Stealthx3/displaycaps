@@ -43,14 +43,15 @@ USAGE:
       Watch the live system (default: every layer) and print one JSON line per change: its
       causes (hotplug, kms_change, ...), the re-probe latency and the diff. Stops after N events
       (default 1) or S seconds (default 60). --kms-poll turns on the KMS change poll.
-  displaycaps link <edid-file> --mode WxH@HZ [--connector hdmi|dp] [--driver NAME]
-                   [--kernel X.Y] [--param MODULE.NAME=VALUE]... [--max-bpc N]
-                   [--color-format auto|rgb|444|422|420] [--sink-frl LANESxGBPS]
-                   [--sink-vic N]... [--json]
+  displaycaps link <edid-file> --mode WxH@HZ [--connector hdmi|dp] [--subconnector NAME]
+                   [--driver NAME] [--kernel X.Y] [--param MODULE.NAME=VALUE]...
+                   [--max-bpc N] [--color-format auto|rgb|444|422|420]
+                   [--gpu-tmds MHZ] [--gpu-frl LANESxGBPS] [--gpu-dsc yes|no]
+                   [--sink-frl LANESxGBPS] [--sink-vic N]... [--json]
       Simulate a link without hardware: the format the driver would send for that mode, and
       every better format with the reason it doesn't fit (defaults: hdmi, amdgpu, kernel 7.4,
-      max bpc 10, automatic format). --sink-frl and --sink-vic simulate a sink with an FRL
-      rate or CTA-861 modes its EDID lacks.
+      max bpc 10, automatic format; the GPU's limits unknown unless given). --sink-frl and
+      --sink-vic simulate a sink with an FRL rate or CTA-861 modes its EDID lacks.
   displaycaps kms-facts [--drm-info FILE]
       Print KMS state as normalized fact lines, read with this library's read-only ioctls (only
       inside a display session), or from a `drm_info -j` file. Lab tooling for the KMS gate.
@@ -319,13 +320,24 @@ fn cmd_link(args: &[String]) -> Result<(), String> {
         edid: std::fs::read(file).map_err(|e| format!("{file}: {e}"))?,
         mode: (0, 0, 0),
         connector: ConnectorType::Hdmi,
+        subconnector: None,
         driver: "amdgpu".into(),
         kernel: "7.4".into(),
         params: vec![],
-        max_bpc: 10,
+        max_bpc: Some(10),
         color_format: None,
+        source_tmds_khz: None,
+        source_frl: None,
+        source_dsc: None,
         sink_frl: None,
         sink_vics: vec![],
+    };
+    let frl_arg = |v: String, what: &str| -> Result<FrlRate, String> {
+        let (l, g) = v.split_once('x').ok_or(format!("{what} LANESxGBPS"))?;
+        Ok(FrlRate {
+            lanes: l.parse().map_err(|_| format!("{what}: lanes"))?,
+            gbps_per_lane: g.parse().map_err(|_| format!("{what}: rate"))?,
+        })
     };
     let mut json = false;
     let mut it = rest.iter();
@@ -357,7 +369,14 @@ fn cmd_link(args: &[String]) -> Result<(), String> {
                 let (n, x) = v.split_once('=').ok_or("--param MODULE.NAME=VALUE")?;
                 sc.params.push((n.to_string(), x.to_string()));
             }
-            "--max-bpc" => sc.max_bpc = val()?.parse().map_err(|_| "--max-bpc: number")?,
+            "--max-bpc" => sc.max_bpc = Some(val()?.parse().map_err(|_| "--max-bpc: number")?),
+            "--subconnector" => sc.subconnector = Some(val()?),
+            "--gpu-tmds" => {
+                sc.source_tmds_khz =
+                    Some(val()?.parse::<u32>().map_err(|_| "--gpu-tmds: MHz")? * 1000)
+            }
+            "--gpu-frl" => sc.source_frl = Some(frl_arg(val()?, "--gpu-frl")?),
+            "--gpu-dsc" => sc.source_dsc = Some(val()? == "yes"),
             "--color-format" => {
                 sc.color_format = match val()?.as_str() {
                     "auto" => None,
@@ -368,14 +387,7 @@ fn cmd_link(args: &[String]) -> Result<(), String> {
                     o => return Err(format!("--color-format: {o}")),
                 }
             }
-            "--sink-frl" => {
-                let v = val()?;
-                let (l, g) = v.split_once('x').ok_or("--sink-frl LANESxGBPS")?;
-                sc.sink_frl = Some(FrlRate {
-                    lanes: l.parse().map_err(|_| "--sink-frl: lanes")?,
-                    gbps_per_lane: g.parse().map_err(|_| "--sink-frl: rate")?,
-                });
-            }
+            "--sink-frl" => sc.sink_frl = Some(frl_arg(val()?, "--sink-frl")?),
             "--sink-vic" => sc
                 .sink_vics
                 .push(val()?.parse().map_err(|_| "--sink-vic: number")?),
@@ -431,7 +443,17 @@ fn cmd_link(args: &[String]) -> Result<(), String> {
                 fmt(f)
             );
         }
-        _ => println!("link:     nothing fits"),
+        _ => println!(
+            "link:     unknown ({})",
+            match &ls.color_format {
+                displaycaps_model::Value::Unknown { detail, .. } =>
+                    detail.clone().unwrap_or_default(),
+                _ => String::new(),
+            }
+        ),
+    }
+    if !matches!(layer.availability, displaycaps_model::Availability::Read) {
+        println!("state:    {:?}", layer.availability);
     }
     for r in &ls.rejected {
         println!(
