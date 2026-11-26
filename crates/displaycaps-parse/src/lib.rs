@@ -5,6 +5,12 @@
 //!
 //! - [`edid`] — EDID base block and CTA-861 extensions; serial redaction for captures; the serial
 //!   that feeds the sink key. Video blocks are added in phase 2.
+//! - [`timing`] — detailed timings, base-block timings and descriptors, DMT, CVT and GTF.
+//! - [`dmt`] — the VESA DMT table.
+//! - [`cvt`] — CVT and GTF timing formulas.
+//! - [`vic`] — CTA-861 VIC and HDMI VIC timing tables.
+//! - [`cta_video`] — CTA-861 video, colour, HDR, HDMI 2.1 and vendor video blocks.
+//! - [`displayid`] — DisplayID 1.3 and 2.x.
 //! - [`sad`] — CTA-861 Short Audio Descriptors (kept so the combined library sees the same audio
 //!   fields as AudioCaps).
 //! - [`ids`] — PNP manufacturer and CEC vendor name tables.
@@ -13,7 +19,13 @@
 //! Parsers never panic on any input; malformed input yields an error, `None`, or a partial result
 //! with a `truncated` flag.
 
+pub mod cta_video;
+pub mod cvt;
+pub mod displayid;
+pub mod dmt;
 pub mod edid;
 pub mod ids;
 pub mod os_release;
 pub mod sad;
+pub mod timing;
+pub mod vic;

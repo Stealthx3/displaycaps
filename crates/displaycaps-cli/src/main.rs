@@ -39,6 +39,9 @@ USAGE:
       Probe a fixture with the full scope and print the snapshot as JSON.
   displaycaps schema
       Print the JSON schema of the snapshot (v1).
+  displaycaps sink <edid-file> [--keep-serial]
+      Decode an EDID file into the sink record (JSON) with the bundled quirk data. The serial is
+      redacted unless --keep-serial is given.
 ";
 
 fn main() -> ExitCode {
@@ -66,6 +69,9 @@ fn main() -> ExitCode {
             print!("{}", displaycaps_model::schema::snapshot_schema());
             Ok(())
         }
+        Some("sink") if args.len() >= 2 => {
+            cmd_sink(&args[1], args[2..].iter().any(|a| a == "--keep-serial"))
+        }
         _ => {
             eprint!("{USAGE}");
             return ExitCode::from(2);
@@ -86,6 +92,28 @@ fn print_snapshot(root: &SystemRoot) {
         "{}",
         serde_json::to_string_pretty(&snap).expect("snapshot serializes")
     );
+}
+
+fn cmd_sink(path: &str, keep_serial: bool) -> Result<(), String> {
+    use displaycaps_model::redact::Redact;
+    let raw = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+    let quirks = displaycaps_rules::quirks::QuirkSet::bundled();
+    let mut rec = displaycaps_backends::sink::sink_record(
+        &raw,
+        displaycaps_model::Source::file(path),
+        0,
+        &displaycaps_model::Selection::All,
+        &quirks,
+    )
+    .ok_or("empty EDID: nothing connected")?;
+    if !keep_serial {
+        rec.redact(&displaycaps_model::RedactionPolicy::default());
+    }
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&rec).map_err(|e| e.to_string())?
+    );
+    Ok(())
 }
 
 fn cmd_probe(args: &[String]) -> Result<(), String> {

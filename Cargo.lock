@@ -88,6 +88,7 @@ version = "0.1.0"
 dependencies = [
  "displaycaps-model",
  "displaycaps-parse",
+ "displaycaps-rules",
  "expect-test",
  "serde",
  "serde_json",
@@ -100,6 +101,7 @@ dependencies = [
  "displaycaps-backends",
  "displaycaps-model",
  "displaycaps-parse",
+ "displaycaps-rules",
  "expect-test",
  "flate2",
  "regex",

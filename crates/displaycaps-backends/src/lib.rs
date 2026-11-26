@@ -18,6 +18,7 @@ pub mod manifest;
 pub mod probe;
 pub mod root;
 pub mod runtime;
+pub mod sink;
 mod sandbox;
 pub mod watch;
 

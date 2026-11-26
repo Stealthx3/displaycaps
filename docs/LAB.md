@@ -3,7 +3,7 @@ _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 
 ## Host (from lab.sh doctor)
 - `lab.sh doctor`: OK (virt-install with cloud-init, virt-manager, KVM, LXC driver all present)
-- Network: default (NAT) · Pool: default
+- Network: default (NAT) · Pool: VMDisks (a data drive; never libvirt's default pool, VM-LAB-STANDARD §4)
 - Host meets the requirements; other projects' guests may be running, so keep one DisplayCaps guest up at a time.
 - Real host details, if ever needed, go in git-ignored `docs/LAB.local.md` (PII-REDACTION-STANDARD §6).
 
@@ -43,3 +43,4 @@ _Standard: VM-LAB-STANDARD v1.2 · Created 2026-11-21_
 ## Log
 - 2026-11-21 — doctor OK; Debian 13 base present. lab-displaycaps-main created and provisioned (Rust 1.99.1, cargo-deny 0.22.0, cargo-fuzz 0.13.2).
 - 2026-11-21 — `scripts/lab.sh` is the master v1.2 copy; AudioCaps' local `put` command is not carried over (copy files with `lab.sh run` + the repo instead).
+- 2026-11-21 — All lab guests' disks (main, desktop and their snapshots) and the base volume moved to pool VMDisks by the maintainer's request (done from another project's session); LAB_POOL=VMDisks.

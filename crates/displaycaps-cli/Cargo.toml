@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 displaycaps-model.workspace = true
 displaycaps-parse.workspace = true
+displaycaps-rules.workspace = true
 displaycaps-backends.workspace = true
 serde.workspace = true
 serde_json.workspace = true

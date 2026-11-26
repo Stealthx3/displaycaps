@@ -45,3 +45,24 @@ path = "fuzz_targets/rule_pack.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "cta_video"
+path = "fuzz_targets/cta_video.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "displayid"
+path = "fuzz_targets/displayid.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "timing"
+path = "fuzz_targets/timing.rs"
+test = false
+doc = false
+bench = false

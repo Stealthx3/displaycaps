@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Accepted differences between displaycaps-parse and the oracles (scripts/edid-diff.sh).
+# corpus name<TAB>fact line (+ only ours, - only the oracles)<TAB>reason
+ed-microsoft-surfacebook	- mfg MS_	invalid PNP id (letter out of range): DisplayCaps reports the manufacturer as unknown instead of printing raw characters
+synthetic-invalid-pnp	- mfg @@@	invalid PNP id (all-zero bytes): reported as unknown, by design (parity vector)
+ed-sony-snyc901-override	- hdmi tmds 0	raw max-TMDS byte 0 means "not stated": DisplayCaps reports no limit rather than 0 MHz
+ed-sony-snyd301-override	- hdmi tmds 0	raw max-TMDS byte 0 means "not stated": DisplayCaps reports no limit rather than 0 MHz

@@ -26,14 +26,15 @@ pub enum EdidRedaction {
         numeric_serial: bool,
         /// Whether a serial-number descriptor (tag 0xFF) was present.
         serial_descriptor: bool,
-        /// Whether a DisplayID product identification block carried a non-zero serial.
+        /// Whether a DisplayID block carried a non-zero serial or ContainerID.
         displayid_serial: bool,
     },
 }
 
 /// Clears the numeric serial (bytes 12–15) and any serial-number display descriptor (tag 0xFF)
-/// in the EDID base block, and the serial of every DisplayID product identification block
-/// (tag 0x00 in DisplayID 1.x, 0x20 in 2.x) in DisplayID extension blocks, then fixes every
+/// in the EDID base block, and in DisplayID extension blocks the product identification serial
+/// (tag 0x00 / 0x20), the tiled-topology tile serial (0x12 / 0x28) and the ContainerID (0x29),
+/// then fixes every
 /// checksum it touched. Manufacturer, product code, name and other blocks are kept.
 pub fn redact_serials(edid: &mut [u8]) -> EdidRedaction {
     if edid.len() < BLOCK || edid[..8] != HEADER {
@@ -89,7 +90,7 @@ impl std::fmt::Display for EdidError {
 impl std::error::Error for EdidError {}
 
 /// A decoded EDID.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Edid {
     /// EDID version and revision, e.g. (1, 3).
     pub version: (u8, u8),
@@ -109,9 +110,16 @@ pub struct Edid {
     pub extension_count: u8,
     /// Whether the base-block checksum is valid.
     pub checksum_ok: bool,
+    /// The base block's video section: input, timings and descriptors.
+    pub base: crate::timing::BaseVideo,
     /// Decoded CTA-861 extension blocks.
     pub cta: Vec<CtaBlock>,
-    /// Tags of extension blocks that are present but not decoded (0x70 DisplayID, 0xF0 map …).
+    /// Decoded DisplayID extension blocks (tag 0x70).
+    pub displayid: Vec<crate::displayid::DisplayId>,
+    /// CTA-861 data blocks carried inside DisplayID sections (DisplayID data block 0x81),
+    /// decoded like a CTA extension's video content.
+    pub displayid_cta: Vec<crate::cta_video::CtaVideo>,
+    /// Tags of extension blocks that are present but not decoded (0xF0 block map, …).
     pub other_extensions: Vec<u8>,
     /// Announced extension blocks missing from the buffer.
     pub missing_extensions: u8,
@@ -140,7 +148,7 @@ impl Edid {
 }
 
 /// One CTA-861 extension block.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct CtaBlock {
     /// Index of the block in the EDID (1 = first extension).
     pub block: u8,
@@ -164,6 +172,8 @@ pub struct CtaBlock {
     pub extended_tags: Vec<u8>,
     /// The data block collection ran past its bounds.
     pub truncated: bool,
+    /// Video content: SVDs, 4:2:0 maps, colour, HDR, HDMI 2.1 and vendor video blocks.
+    pub video: crate::cta_video::CtaVideo,
 }
 
 /// HDMI Licensing VSDB (OUI 00-0C-03).
@@ -264,12 +274,17 @@ pub fn parse_edid(b: &[u8]) -> Result<Edid, EdidError> {
     let n = usize::from(extension_count).min(available);
     let mut cta = Vec::new();
     let mut other_extensions = Vec::new();
+    let mut displayid = Vec::new();
+    let mut displayid_cta = Vec::new();
     for i in 1..=n {
         let blk = &b[i * BLOCK..(i + 1) * BLOCK];
-        if blk[0] == 0x02 {
-            cta.push(parse_cta(blk, i as u8));
-        } else {
-            other_extensions.push(blk[0]);
+        match blk[0] {
+            0x02 => cta.push(parse_cta(blk, i as u8)),
+            0x70 => {
+                displayid.push(crate::displayid::parse_displayid(blk));
+                displayid_cta.extend(displayid_cta_blocks(blk));
+            }
+            t => other_extensions.push(t),
         }
     }
     Ok(Edid {
@@ -282,23 +297,58 @@ pub fn parse_edid(b: &[u8]) -> Result<Edid, EdidError> {
         name,
         extension_count,
         checksum_ok: checksum_ok(&b[..BLOCK]),
+        base: crate::timing::parse_base_video(&b[..BLOCK]),
         cta,
+        displayid,
+        displayid_cta,
         other_extensions,
         missing_extensions: extension_count.saturating_sub(n as u8),
     })
 }
 
-/// Zeroes the product serial in a DisplayID extension block (EDID tag 0x70) and fixes the
+/// The CTA-861 data block collections inside a DisplayID section's 0x81 blocks, each decoded by
+/// wrapping it in a synthetic CTA extension block (tag 0x02, revision 3, no detailed timings).
+fn displayid_cta_blocks(blk: &[u8]) -> Vec<crate::cta_video::CtaVideo> {
+    let mut out = Vec::new();
+    let Some(&len) = blk.get(2) else {
+        return out;
+    };
+    let end = (5 + usize::from(len))
+        .min(blk.len().saturating_sub(1))
+        .min(BLOCK - 1);
+    let mut i = 5;
+    while i + 3 <= end {
+        let (tag, plen) = (blk[i], usize::from(blk[i + 2]));
+        let payload = i + 3;
+        if tag == 0 && plen == 0 || payload + plen > end {
+            break;
+        }
+        if tag == 0x81 && plen > 0 && 4 + plen < BLOCK {
+            let mut cta = vec![0u8; BLOCK];
+            cta[0] = 0x02;
+            cta[1] = 0x03;
+            cta[2] = (4 + plen) as u8;
+            cta[4..4 + plen].copy_from_slice(&blk[payload..payload + plen]);
+            out.push(crate::cta_video::parse_cta_video(&cta));
+        }
+        i = payload + plen;
+    }
+    out
+}
+
+/// Zeroes the per-unit identifiers in a DisplayID extension block (EDID tag 0x70): the product
+/// serial, the tiled-topology tile serial and the ContainerID. Then fixes the
 /// DisplayID section checksum and the EDID block checksum. Returns whether a non-zero serial was
 /// found. Malformed sections are left as they are.
 fn redact_displayid(blk: &mut [u8]) -> bool {
     // blk[1] version, blk[2] bytes in section, blk[3] product type, blk[4] extension count,
     // data blocks from blk[5]; the section checksum follows the data blocks.
-    let len = usize::from(blk[2]);
+    // A declared length past the block is clamped, as the parser (and edid-decode) do, so every
+    // block the parser decodes is also redacted. The section checksum then has no room and is left.
+    let declared = usize::from(blk[2]);
+    let len = declared.min(BLOCK - 1 - 5 - 1);
     let end = 5 + len;
-    if end >= BLOCK - 1 {
-        return false;
-    }
+    let section_checksum = declared == len;
     let mut found = false;
     let mut i = 5;
     while i + 3 <= end {
@@ -307,19 +357,30 @@ fn redact_displayid(blk: &mut [u8]) -> bool {
         if payload + plen > end {
             break;
         }
-        // Product identification: 3-byte id, 2-byte product code, 4-byte serial.
-        if (tag == 0x00 || tag == 0x20) && plen >= 9 {
-            let serial = &mut blk[payload + 5..payload + 9];
-            if serial.iter().any(|&b| b != 0) {
+        // Per-unit identifiers: the product-ID serial (3-byte id, 2-byte product, 4-byte serial),
+        // the tiled-topology tile serial (payload bytes 18..22), the ContainerID UUID and the
+        // DisplayID 1.x ASCII serial number block (0x0A).
+        let range = match tag {
+            0x0A if plen > 0 => Some(payload..payload + plen),
+            0x00 | 0x20 if plen >= 9 => Some(payload + 5..payload + 9),
+            0x12 | 0x28 if plen >= 22 => Some(payload + 18..payload + 22),
+            0x29 if plen >= 16 => Some(payload..payload + 16),
+            _ => None,
+        };
+        if let Some(r) = range {
+            let field = &mut blk[r];
+            if field.iter().any(|&b| b != 0) {
                 found = true;
-                serial.fill(0);
+                field.fill(0);
             }
         }
         i = payload + plen;
     }
     if found {
-        let sum: u32 = blk[1..end].iter().map(|&b| u32::from(b)).sum();
-        blk[end] = ((256 - (sum % 256)) % 256) as u8;
+        if section_checksum {
+            let sum: u32 = blk[1..end].iter().map(|&b| u32::from(b)).sum();
+            blk[end] = ((256 - (sum % 256)) % 256) as u8;
+        }
         let sum: u32 = blk[..BLOCK - 1].iter().map(|&b| u32::from(b)).sum();
         blk[BLOCK - 1] = ((256 - (sum % 256)) % 256) as u8;
     }
@@ -368,6 +429,7 @@ pub fn parse_cta(blk: &[u8], index: u8) -> CtaBlock {
         return c;
     }
     c.revision = blk[1];
+    c.video = crate::cta_video::parse_cta_video(blk);
     c.basic_audio = blk[3] & 0x40 != 0;
     c.checksum_ok = blk.len() == BLOCK && checksum_ok(blk);
     // Byte 2: offset of the first detailed timing; data blocks live in 4..d. 0 means none.
@@ -562,6 +624,46 @@ mod tests {
         assert_eq!(&e[13..17], &[0, 0, 0, 0], "serial zeroed");
         assert_eq!(&e[5..13], &blk[..8], "id and product kept");
         assert_eq!(e[1..18].iter().map(|&x| u32::from(x)).sum::<u32>() % 256, 0);
+        assert_eq!(e.iter().map(|&x| u32::from(x)).sum::<u32>() % 256, 0);
+    }
+
+    #[test]
+    fn clears_tile_serial_and_container_id() {
+        let mut b = sample();
+        b.truncate(BLOCK);
+        b[126] = 1;
+        let mut ext = vec![0u8; BLOCK];
+        ext[0] = 0x70;
+        ext[1] = 0x20;
+        // A 0x28 tiled-topology block (22-byte payload) and a 0x29 ContainerID (16 bytes).
+        let mut tile = vec![0x28, 0x00, 22];
+        tile.extend((1..=22u8).collect::<Vec<_>>());
+        let mut cid = vec![0x29, 0x00, 16];
+        cid.extend([0xAB; 16]);
+        let body: Vec<u8> = tile.iter().chain(cid.iter()).copied().collect();
+        ext[2] = body.len() as u8;
+        ext[5..5 + body.len()].copy_from_slice(&body);
+        let end = 5 + body.len();
+        let s: u32 = ext[1..end].iter().map(|&x| u32::from(x)).sum();
+        ext[end] = ((256 - (s % 256)) % 256) as u8;
+        let s: u32 = ext[..127].iter().map(|&x| u32::from(x)).sum();
+        ext[127] = ((256 - (s % 256)) % 256) as u8;
+        b.extend_from_slice(&ext);
+        assert!(matches!(
+            redact_serials(&mut b),
+            EdidRedaction::Redacted {
+                displayid_serial: true,
+                ..
+            }
+        ));
+        let e = &b[BLOCK..];
+        assert_eq!(&e[8 + 18..8 + 22], &[0, 0, 0, 0], "tile serial zeroed");
+        assert_eq!(&e[8..8 + 18], &tile[3..21], "rest of the tile block kept");
+        assert_eq!(&e[33..49], &[0u8; 16], "ContainerID zeroed");
+        assert_eq!(
+            e[1..end + 1].iter().map(|&x| u32::from(x)).sum::<u32>() % 256,
+            0
+        );
         assert_eq!(e.iter().map(|&x| u32::from(x)).sum::<u32>() % 256, 0);
     }
 

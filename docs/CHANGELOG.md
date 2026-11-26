@@ -22,3 +22,11 @@ All notable changes to this project are documented here. The format follows
   compositor and decode state with EDID serials zeroed; strace passive check.
 - Golden-snapshot fixtures from GNOME, Plasma and Sway lab sessions and the
   workstation; EDID corpus; lab-only edid-decode and di-edid-decode oracles.
+- EDID video parser: detailed, standard, established and CVT timings with the
+  DMT, CVT, GTF and VIC tables; range limits; CTA-861 video capability,
+  colorimetry, HDR static and dynamic metadata, Dolby Vision, HDR10+, 4:2:0
+  maps, the full HDMI Forum VSDB and SCDB (FRL, DSC, VRR, ALLM) and FreeSync;
+  DisplayID 1.3 and 2.x, including CTA blocks inside DisplayID.
+- Sink record from the EDID with quirk data (`displaycaps sink <edid-file>`).
+- Differential tests against edid-decode and di-edid-decode over 171 EDIDs,
+  and fuzz targets for every block parser.
