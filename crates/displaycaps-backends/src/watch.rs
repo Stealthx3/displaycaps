@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Copied from AudioCaps v1.0.0 (commit 049d053) crates/audiocaps-backends/src/watch.rs; the sound
-// device and sound-server event sources are dropped, a manual trigger and a timer remain.
+// Adapted from AudioCaps v1.0.0 (commit 049d053) crates/audiocaps-backends/src/watch.rs; the sound
+// device and sound-server event sources are replaced by DRM hotplug and KMS change sources.
 //! Change events: a watch re-probes the watched scope when it is triggered and delivers the new
 //! snapshot with its diff. Events whose re-probe changes nothing in scope are dropped.
 //!
 //! Triggers:
 //! - [`Watch::trigger`], whenever the application knows something may have changed;
-//! - a timer, every [`crate::runtime::ProbeOptions::watch_interval`] when set.
+//! - a timer, every [`crate::runtime::ProbeOptions::watch_interval`] when set;
+//! - DRM hotplug uevents (live system, when a DRM layer is in scope);
+//! - KMS changes (mode, HDR metadata, VRR, properties), noticed by re-reading KMS every
+//!   [`crate::runtime::ProbeOptions::kms_poll_interval`] (live system inside a display session,
+//!   when the KMS layer is in scope). The kernel announces these only to the compositor; the
+//!   compositor's own events arrive with its backend in phase 5.
 //!
-//! Event sources of their own (DRM uevents for hotplug, compositor output changes) are added with
-//! their backends in phases 3 to 5; they will push [`Cause`]s into the same loop. Only the
-//! watched scope is re-probed.
+//! Only the watched scope is re-probed. Event sources only receive or read; none changes state.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -33,6 +36,10 @@ pub enum Cause {
     Manual,
     /// The watch interval elapsed.
     Timer,
+    /// A DRM hotplug uevent (a connector's state changed).
+    Hotplug,
+    /// KMS state changed (mode, HDR metadata, VRR or another property).
+    KmsChange,
 }
 
 /// One update.
@@ -51,19 +58,19 @@ pub struct WatchEvent {
 /// A handle that triggers a watch from any thread (for the C ABI, which keeps the watch itself on
 /// its event thread). Triggering a finished watch does nothing.
 #[derive(Debug, Clone)]
-pub struct Trigger(mpsc::Sender<()>);
+pub struct Trigger(mpsc::Sender<Cause>);
 
 impl Trigger {
     /// Asks the watch to re-probe now.
     pub fn fire(&self) {
-        let _ = self.0.send(());
+        let _ = self.0.send(Cause::Manual);
     }
 }
 
 /// A running watch. Dropping it stops the watch thread.
 pub struct Watch {
     rx: mpsc::Receiver<WatchEvent>,
-    trigger: mpsc::Sender<()>,
+    trigger: mpsc::Sender<Cause>,
     stop: Arc<AtomicBool>,
     handle: Option<thread::JoinHandle<()>>,
 }
@@ -78,6 +85,9 @@ impl Watch {
         let (tx, rx) = mpsc::channel();
         let (trigger, trigger_rx) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
+        if matches!(root, SystemRoot::Live) {
+            sources::start(&scope, &opts, trigger.clone(), stop.clone());
+        }
         let s = stop.clone();
         let handle = thread::Builder::new()
             .name("displaycaps-watch".into())
@@ -92,7 +102,7 @@ impl Watch {
 
     /// Asks the watch to re-probe now. An update arrives only if something in scope changed.
     pub fn trigger(&self) {
-        let _ = self.trigger.send(());
+        let _ = self.trigger.send(Cause::Manual);
     }
 
     /// A handle that triggers this watch from another thread.
@@ -134,7 +144,7 @@ fn run(
     opts: ProbeOptions,
     shared: Arc<Shared>,
     tx: mpsc::Sender<WatchEvent>,
-    triggers: mpsc::Receiver<()>,
+    triggers: mpsc::Receiver<Cause>,
     stop: Arc<AtomicBool>,
 ) {
     let trace = std::env::var_os("DISPLAYCAPS_WATCH_TRACE").is_some();
@@ -162,10 +172,14 @@ fn run(
     let mut next_timer = opts.watch_interval.map(|d| Instant::now() + d);
     while !stop.load(Ordering::SeqCst) {
         let mut causes = vec![];
-        if triggers.recv_timeout(TICK).is_ok() {
+        if let Ok(c) = triggers.recv_timeout(TICK) {
             // Coalesce a burst of triggers into one re-probe.
-            while triggers.try_recv().is_ok() {}
-            causes.push(Cause::Manual);
+            causes.push(c);
+            while let Ok(c) = triggers.try_recv() {
+                if !causes.contains(&c) {
+                    causes.push(c);
+                }
+            }
         }
         if let (Some(at), Some(every)) = (next_timer, opts.watch_interval)
             && Instant::now() >= at
@@ -198,6 +212,82 @@ fn run(
         };
         if tx.send(ev).is_err() {
             return;
+        }
+    }
+}
+
+/// Event sources: threads that push [`Cause`]s until the watch stops.
+mod sources {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::Sender;
+    use std::thread;
+    use std::time::Duration;
+
+    use displaycaps_model::{LayerKind, ProbeScope};
+
+    use super::Cause;
+    use crate::drm;
+    use crate::environment::Env;
+    use crate::root::SystemRoot;
+    use crate::runtime::ProbeOptions;
+
+    /// How long a source blocks before looking at the stop flag.
+    const POLL: Duration = Duration::from_millis(100);
+
+    pub(super) fn start(
+        scope: &ProbeScope,
+        opts: &ProbeOptions,
+        tx: Sender<Cause>,
+        stop: Arc<AtomicBool>,
+    ) {
+        if drm::in_scope(scope)
+            && let Ok(listener) = drm::uevent::Listener::open(POLL)
+        {
+            let (tx, stop) = (tx.clone(), stop.clone());
+            let _ = thread::Builder::new()
+                .name("displaycaps-uevent".into())
+                .spawn(move || {
+                    while !stop.load(Ordering::SeqCst) {
+                        match listener.next() {
+                            Ok(Some(ev)) if ev.hotplug || ev.action != "change" => {
+                                if tx.send(Cause::Hotplug).is_err() {
+                                    return;
+                                }
+                            }
+                            Ok(_) => {}
+                            Err(_) => return,
+                        }
+                    }
+                });
+        }
+        let env = Env::for_probe(&SystemRoot::Live, opts);
+        if let (true, Some(every), drm::KmsAccess::Live) = (
+            scope.layers.includes(&LayerKind::Kms),
+            opts.kms_poll_interval,
+            drm::kms_access(&SystemRoot::Live, &env),
+        ) {
+            let _ = thread::Builder::new()
+                .name("displaycaps-kms-poll".into())
+                .spawn(move || {
+                    let mut last = drm::kms_signature();
+                    let mut waited = Duration::ZERO;
+                    while !stop.load(Ordering::SeqCst) {
+                        thread::sleep(POLL.min(every));
+                        waited += POLL.min(every);
+                        if waited < every {
+                            continue;
+                        }
+                        waited = Duration::ZERO;
+                        let now = drm::kms_signature();
+                        if now != last {
+                            last = now;
+                            if tx.send(Cause::KmsChange).is_err() {
+                                return;
+                            }
+                        }
+                    }
+                });
         }
     }
 }

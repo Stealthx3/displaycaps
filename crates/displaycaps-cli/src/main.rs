@@ -39,6 +39,13 @@ USAGE:
       Probe a fixture with the full scope and print the snapshot as JSON.
   displaycaps schema
       Print the JSON schema of the snapshot (v1).
+  displaycaps watch [--layer NAME]... [--events N] [--seconds S]
+      Watch the live system (default: every layer) and print one JSON line per change: its
+      causes (hotplug, kms_change, ...), the re-probe latency and the diff. Stops after N events
+      (default 1) or S seconds (default 60).
+  displaycaps kms-facts [--drm-info FILE]
+      Print KMS state as normalized fact lines, read with this library's read-only ioctls (only
+      inside a display session), or from a `drm_info -j` file. Lab tooling for the KMS gate.
   displaycaps sink <edid-file> [--keep-serial]
       Decode an EDID file into the sink record (JSON) with the bundled quirk data. The serial is
       redacted unless --keep-serial is given.
@@ -53,6 +60,8 @@ fn main() -> ExitCode {
         Some("redact-fixture") if args.len() == 2 => archive::redact_fixture(args[1].as_ref())
             .map_err(|e| e.to_string())
             .map(|n| println!("{n} files re-redacted")),
+        Some("kms-facts") => cmd_kms_facts(&args[1..]),
+        Some("watch") => cmd_watch(&args[1..]),
         Some("replay") if args.len() == 2 => SystemRoot::fixture(&args[1])
             .map_err(|e| e.to_string())
             .map(|r| print_snapshot(&r)),
@@ -212,4 +221,77 @@ fn cmd_check(dir: &str) -> Result<(), String> {
     } else {
         Err(format!("redaction check failed:\n  {}", leaks.join("\n  ")))
     }
+}
+
+fn cmd_kms_facts(args: &[String]) -> Result<(), String> {
+    let json = match args {
+        [] => None,
+        [flag, file] if flag == "--drm-info" => {
+            Some(std::fs::read(file).map_err(|e| format!("{file}: {e}"))?)
+        }
+        _ => return Err("usage: displaycaps kms-facts [--drm-info FILE]".into()),
+    };
+    for line in displaycaps_backends::kms_facts(json.as_deref())? {
+        println!("{line}");
+    }
+    Ok(())
+}
+
+fn cmd_watch(args: &[String]) -> Result<(), String> {
+    let mut scope = ProbeScope::everything();
+    let mut layers: Vec<LayerKind> = vec![];
+    let (mut events, mut seconds) = (1u32, 60u64);
+    let mut it = args.iter();
+    let num = |v: Option<&String>, what: &str| {
+        v.and_then(|n| n.parse::<u64>().ok())
+            .filter(|n| *n > 0)
+            .ok_or(format!("{what} needs a positive number"))
+    };
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--layer" => {
+                let name = it.next().ok_or("--layer needs a name")?;
+                layers.push(
+                    serde_json::from_value(serde_json::Value::String(name.clone()))
+                        .map_err(|_| format!("unknown layer {name}"))?,
+                );
+            }
+            "--events" => events = u32::try_from(num(it.next(), "--events")?).unwrap_or(u32::MAX),
+            "--seconds" => seconds = num(it.next(), "--seconds")?,
+            other => return Err(format!("unknown option {other}")),
+        }
+    }
+    if !layers.is_empty() {
+        scope.layers = Selection::Only(layers);
+    }
+    let rt = Runtime::new(SystemRoot::Live).map_err(|e| e.to_string())?;
+    let w = rt
+        .watch(&scope, &ProbeOptions::default())
+        .map_err(|e| e.to_string())?;
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+    // The first event is the initial snapshot.
+    let first = w
+        .recv_timeout(std::time::Duration::from_secs(seconds))
+        .ok_or("no initial snapshot")?;
+    eprintln!(
+        "watch: initial snapshot, {} endpoints; waiting for changes",
+        first.snapshot.endpoints.len()
+    );
+    let mut seen = 0;
+    while seen < events {
+        let left = end.saturating_duration_since(std::time::Instant::now());
+        let Some(ev) = w.recv_timeout(left) else {
+            return Err(format!("{seen} of {events} events before the timeout"));
+        };
+        seen += 1;
+        println!(
+            "{}",
+            serde_json::json!({
+                "causes": ev.causes.iter().map(|c| format!("{c:?}")).collect::<Vec<_>>(),
+                "latency_ms": ev.latency.as_secs_f64() * 1e3,
+                "diff": ev.diff,
+            })
+        );
+    }
+    Ok(())
 }

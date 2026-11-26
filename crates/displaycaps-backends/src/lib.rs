@@ -9,19 +9,22 @@
 //! - [`watch`]: change events for a watched scope (manual or timed triggers; hotplug and
 //!   compositor event sources arrive with their backends).
 //!
-//! The environment layer (os-release, kernel, sandbox, display session) is read here; the other
-//! layers report `unknown` with reason `not_implemented` until their backends exist (phases 3 to
-//! 6). Nothing outside the probe scope is read or reported.
+//! The environment layer (os-release, kernel, sandbox, display session), the sysfs DRM layers
+//! (sink chain, host hardware, kernel driver) and read-only KMS are read here; the link,
+//! compositor and decode layers report `unknown` with reason `not_implemented` until their
+//! backends exist (phases 4 to 6). Nothing outside the probe scope is read or reported.
 
+pub(crate) mod drm;
 mod environment;
 pub mod manifest;
 pub mod probe;
 pub mod root;
 pub mod runtime;
-pub mod sink;
 mod sandbox;
+pub mod sink;
 pub mod watch;
 
+pub use drm::kms_facts;
 pub use probe::{probe, probe_with};
 pub use root::SystemRoot;
 pub use runtime::{Backend, ProbeOptions, Runtime};
