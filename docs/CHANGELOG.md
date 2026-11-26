@@ -30,3 +30,15 @@ All notable changes to this project are documented here. The format follows
 - Sink record from the EDID with quirk data (`displaycaps sink <edid-file>`).
 - Differential tests against edid-decode and di-edid-decode over 171 EDIDs,
   and fuzz targets for every block parser.
+- Endpoints from sysfs DRM: connectors with their cached status, the sink
+  record from the cached EDID, GPU and PCI ids, driver and display-related
+  module parameters, and correlation keys (DRM connector, KMS connector and
+  CRTC, sink key).
+- Read-only KMS layer: active mode, the cached mode list, `max bpc`,
+  `Colorspace`, `color format`, `HDR_OUTPUT_METADATA`, `Broadcast RGB`,
+  `vrr_capable`, `VRR_ENABLED`, `content type`, `link-status` and panel
+  orientation. Read only where a compositor holds DRM master (never as master);
+  fixtures replay captured `drm_info -j` output.
+- Watch events for DRM hotplug (kernel uevents) and, opt-in, KMS changes
+  (mode, HDR, VRR) with `ProbeOptions::kms_poll_interval`.
+- `displaycaps watch` and `displaycaps kms-facts` (lab tooling).

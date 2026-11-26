@@ -17,6 +17,9 @@ displaycaps-parse.workspace = true
 displaycaps-rules.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+drm.workspace = true
+drm-ffi.workspace = true
+nix.workspace = true
 
 [lints]
 workspace = true

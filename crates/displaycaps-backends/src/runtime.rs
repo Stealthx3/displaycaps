@@ -94,6 +94,11 @@ pub struct ProbeOptions {
     /// How often a watch re-probes on its own; `None` re-probes only when asked
     /// ([`crate::watch::Watch::trigger`]).
     pub watch_interval: Option<Duration>,
+    /// Opt-in: how often a watch whose scope includes the KMS layer re-reads KMS (read-only) to
+    /// notice mode, HDR and VRR changes, which the kernel announces to nobody but the compositor.
+    /// Live system only, and only while KMS may be read (display session, cards that drive an
+    /// output; re-checked on every read). `None` (the default) leaves it off; at least 100 ms.
+    pub kms_poll_interval: Option<Duration>,
 }
 
 impl Default for ProbeOptions {
@@ -109,6 +114,7 @@ impl Default for ProbeOptions {
             redaction: None,
             environment: None,
             watch_interval: None,
+            kms_poll_interval: None,
         }
     }
 }
@@ -173,6 +179,12 @@ impl ProbeOptions {
     /// Makes a watch re-probe every `interval` in addition to manual triggers.
     pub fn with_watch_interval(mut self, interval: Duration) -> Self {
         self.watch_interval = Some(interval);
+        self
+    }
+
+    /// Opt-in: sets how often a watch re-reads KMS for mode, HDR and VRR changes (`None`: never).
+    pub fn with_kms_poll(mut self, interval: Option<Duration>) -> Self {
+        self.kms_poll_interval = interval;
         self
     }
 

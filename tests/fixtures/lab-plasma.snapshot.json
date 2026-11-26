@@ -31,33 +31,25 @@
     {
       "layer": "sink_chain",
       "availability": {
-        "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "state": "read"
       }
     },
     {
       "layer": "host_hardware",
       "availability": {
-        "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "state": "read"
       }
     },
     {
       "layer": "kernel_driver",
       "availability": {
-        "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "state": "read"
       }
     },
     {
       "layer": "kms",
       "availability": {
-        "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "state": "read"
       }
     },
     {
@@ -143,5 +135,1499 @@
       "detail": "environment variables are not captured"
     }
   },
-  "endpoints": []
+  "endpoints": [
+    {
+      "id": "card0-Virtual-1",
+      "class": "virtual",
+      "connector": {
+        "state": "known",
+        "value": "virtual",
+        "confidence": "measured",
+        "provenance": {
+          "layer": "host_hardware",
+          "source": {
+            "kind": "file",
+            "path": "/sys/class/drm/card0-Virtual-1"
+          },
+          "read_at_ms": 1795262784216
+        }
+      },
+      "status": {
+        "state": "known",
+        "value": "connected",
+        "confidence": "measured",
+        "provenance": {
+          "layer": "host_hardware",
+          "source": {
+            "kind": "file",
+            "path": "/sys/class/drm/card0-Virtual-1/status"
+          },
+          "read_at_ms": 1795262784216
+        }
+      },
+      "correlation": [
+        {
+          "id": {
+            "kind": "drm_connector",
+            "name": "card0-Virtual-1"
+          },
+          "confidence": "measured"
+        },
+        {
+          "id": {
+            "kind": "kms_connector",
+            "card": "card0",
+            "id": 37
+          },
+          "confidence": "measured"
+        },
+        {
+          "id": {
+            "kind": "kms_crtc",
+            "card": "card0",
+            "id": 36
+          },
+          "confidence": "measured"
+        },
+        {
+          "id": {
+            "kind": "sink_key",
+            "key": "RHT-1234"
+          },
+          "confidence": "measured"
+        }
+      ],
+      "sink": {
+        "identity": {
+          "manufacturer_id": {
+            "state": "known",
+            "value": "RHT",
+            "confidence": "measured",
+            "provenance": {
+              "layer": "sink_chain",
+              "source": {
+                "kind": "file",
+                "path": "/sys/class/drm/card0-Virtual-1/edid"
+              },
+              "read_at_ms": 1795262784216
+            }
+          },
+          "manufacturer_name": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "manufacturer id not in the name table"
+          },
+          "product_code": {
+            "state": "known",
+            "value": 4660,
+            "confidence": "measured",
+            "provenance": {
+              "layer": "sink_chain",
+              "source": {
+                "kind": "file",
+                "path": "/sys/class/drm/card0-Virtual-1/edid"
+              },
+              "read_at_ms": 1795262784216
+            }
+          },
+          "model_name": {
+            "state": "known",
+            "value": "QEMU Monitor",
+            "confidence": "measured",
+            "provenance": {
+              "layer": "sink_chain",
+              "source": {
+                "kind": "file",
+                "path": "/sys/class/drm/card0-Virtual-1/edid"
+              },
+              "read_at_ms": 1795262784216
+            }
+          },
+          "sink_key": {
+            "state": "known",
+            "value": "RHT-1234",
+            "confidence": "inferred",
+            "provenance": {
+              "layer": "sink_chain",
+              "source": {
+                "kind": "derived",
+                "from": "manufacturer, product and serial"
+              },
+              "read_at_ms": 1795262784216
+            }
+          }
+        },
+        "edid": {
+          "state": "known",
+          "value": {
+            "version": "1.4",
+            "length": 256,
+            "extensions": [
+              "cta-861"
+            ],
+            "checksums_valid": true,
+            "manufactured": "week 42 of 2014",
+            "interface": "displayport",
+            "range_limits": {
+              "min_vertical_hz": 50,
+              "max_vertical_hz": 125,
+              "min_horizontal_khz": 30,
+              "max_horizontal_khz": 160,
+              "max_pixel_clock_khz": 2550000,
+              "formula": "range_only"
+            }
+          },
+          "confidence": "measured",
+          "provenance": {
+            "layer": "sink_chain",
+            "source": {
+              "kind": "file",
+              "path": "/sys/class/drm/card0-Virtual-1/edid"
+            },
+            "read_at_ms": 1795262784216
+          }
+        },
+        "video": {
+          "modes": {
+            "state": "known",
+            "value": [
+              {
+                "width": 5120,
+                "height": 2160,
+                "refresh_millihz": 50000,
+                "timing": {
+                  "pixel_clock_khz": 742500,
+                  "h_total": 6600,
+                  "v_total": 2250
+                },
+                "vic": 125,
+                "sources": [
+                  "cta_vic"
+                ]
+              },
+              {
+                "width": 4096,
+                "height": 2160,
+                "refresh_millihz": 50000,
+                "timing": {
+                  "pixel_clock_khz": 594000,
+                  "h_total": 5280,
+                  "v_total": 2250
+                },
+                "vic": 101,
+                "sources": [
+                  "cta_vic"
+                ]
+              },
+              {
+                "width": 3840,
+                "height": 2160,
+                "refresh_millihz": 60000,
+                "timing": {
+                  "pixel_clock_khz": 594000,
+                  "h_total": 4400,
+                  "v_total": 2250
+                },
+                "vic": 97,
+                "sources": [
+                  "cta_vic"
+                ]
+              },
+              {
+                "width": 3840,
+                "height": 2160,
+                "refresh_millihz": 50000,
+                "timing": {
+                  "pixel_clock_khz": 594000,
+                  "h_total": 5280,
+                  "v_total": 2250
+                },
+                "vic": 96,
+                "sources": [
+                  "cta_vic"
+                ]
+              },
+              {
+                "width": 1920,
+                "height": 1440,
+                "refresh_millihz": 60000,
+                "timing": {
+                  "pixel_clock_khz": 234000,
+                  "h_total": 2600,
+                  "v_total": 1500
+                },
+                "sources": [
+                  "established"
+                ]
+              },
+              {
+                "width": 2560,
+                "height": 1080,
+                "refresh_millihz": 50000,
+                "timing": {
+                  "pixel_clock_khz": 185625,
+                  "h_total": 3300,
+                  "v_total": 1125
+                },
+                "vic": 89,
+                "sources": [
+                  "cta_vic"
+                ]
+              },
+              {
+                "width": 1856,
+                "height": 1392,
+                "refresh_millihz": 59995,
+                "timing": {
+                  "pixel_clock_khz": 218250,
+                  "h_total": 2528,
+                  "v_total": 1439
+                },
+                "sources": [
+                  "established"
+                ]
+              },
+              {
+                "width": 1792,
+                "height": 1344,
+                "refresh_millihz": 60000,
+                "timing": {
+                  "pixel_clock_khz": 204750,
+                  "h_total": 2448,
+                  "v_total": 1394
+                },
+                "sources": [
+                  "established"
+                ]
+              },
+              {
+                "width": 2048,
+                "height": 1152,
+                "refresh_millihz": 60000,
+                "timing": {
+                  "pixel_clock_khz": 162000,
+                  "h_total": 2250,
+                  "v_total": 1200
+                },
+                "sources": [
+                  "standard"
+                ]
+              },
+              {
+                "width": 1920,
+                "height": 1200,
+                "refresh_millihz": 59885,
+                "timing": {
+                  "pixel_clock_khz": 193250,
+                  "h_total": 2592,
+                  "v_total": 1245
+                },
+                "sources": [
+                  "standard"
+                ]
+              },
+              {
+                "width": 1920,
+                "height": 1080,
+                "refresh_millihz": 60000,
+                "timing": {
+                  "pixel_clock_khz": 148500,
+                  "h_total": 2200,
+                  "v_total": 1125
+                },
+                "sources": [
+                  "standard"
+                ]
+              },
+              {
+                "width": 1920,
+                "height": 1080,
+                "refresh_millihz": 50000,
+                "timing": {
+                  "pixel_clock_khz": 148500,
+                  "h_total": 2640,
+                  "v_total": 1125
+                },
+                "vic": 31,
+                "sources": [
+                  "cta_vic"
+                ]
+              },
+              {
+                "width": 1600,
+                "height": 1200,
+                "refresh_millihz": 60000,
+                "timing": {
+                  "pixel_clock_khz": 162000,
+                  "h_total": 2160,
+                  "v_total": 1250
+                },
+                "sources": [
+                  "standard"
+                ]
+              },
+              {
+                "width": 1680,
+                "height": 1050,
+                "refresh_millihz": 59954,
+                "timing": {
+                  "pixel_clock_khz": 146250,
+                  "h_total": 2240,
+                  "v_total": 1089
+                },
+                "sources": [
+                  "standard"
+                ]
+              },
+              {
+                "width": 1400,
+                "height": 1050,
+                "refresh_millihz": 59978,
+                "timing": {
+                  "pixel_clock_khz": 121750,
+                  "h_total": 1864,
+                  "v_total": 1089
+                },
+                "sources": [
+                  "established"
+                ]
+              },
+              {
+                "width": 1280,
+                "height": 1024,
+                "refresh_millihz": 60020,
+                "timing": {
+                  "pixel_clock_khz": 108000,
+                  "h_total": 1688,
+                  "v_total": 1066
+                },
+                "sources": [
+                  "standard"
+                ]
+              },
+              {
+                "width": 1440,
+                "height": 900,
+                "refresh_millihz": 59887,
+                "timing": {
+                  "pixel_clock_khz": 106500,
+                  "h_total": 1904,
+                  "v_total": 934
+                },
+                "sources": [
+                  "standard"
+                ]
+              },
+              {
+                "width": 1280,
+                "height": 960,
+                "refresh_millihz": 60000,
+                "timing": {
+                  "pixel_clock_khz": 108000,
+                  "h_total": 1800,
+                  "v_total": 1000
+                },
+                "sources": [
+                  "standard"
+                ]
+              },
+              {
+                "width": 1360,
+                "height": 768,
+                "refresh_millihz": 60015,
+                "timing": {
+                  "pixel_clock_khz": 85500,
+                  "h_total": 1792,
+                  "v_total": 795
+                },
+                "sources": [
+                  "established"
+                ]
+              },
+              {
+                "width": 1280,
+                "height": 800,
+                "refresh_millihz": 74994,
+                "timing": {
+                  "pixel_clock_khz": 107300,
+                  "h_total": 1728,
+                  "v_total": 828
+                },
+                "preferred": true,
+                "sources": [
+                  "detailed"
+                ]
+              },
+              {
+                "width": 1280,
+                "height": 768,
+                "refresh_millihz": 59870,
+                "timing": {
+                  "pixel_clock_khz": 79500,
+                  "h_total": 1664,
+                  "v_total": 798
+                },
+                "sources": [
+                  "established"
+                ]
+              },
+              {
+                "width": 1024,
+                "height": 768,
+                "refresh_millihz": 60004,
+                "timing": {
+                  "pixel_clock_khz": 65000,
+                  "h_total": 1344,
+                  "v_total": 806
+                },
+                "sources": [
+                  "established"
+                ]
+              },
+              {
+                "width": 800,
+                "height": 600,
+                "refresh_millihz": 60317,
+                "timing": {
+                  "pixel_clock_khz": 40000,
+                  "h_total": 1056,
+                  "v_total": 628
+                },
+                "sources": [
+                  "established"
+                ]
+              },
+              {
+                "width": 640,
+                "height": 480,
+                "refresh_millihz": 59940,
+                "timing": {
+                  "pixel_clock_khz": 25175,
+                  "h_total": 800,
+                  "v_total": 525
+                },
+                "sources": [
+                  "established"
+                ]
+              }
+            ],
+            "confidence": "measured",
+            "provenance": {
+              "layer": "sink_chain",
+              "source": {
+                "kind": "file",
+                "path": "/sys/class/drm/card0-Virtual-1/edid"
+              },
+              "read_at_ms": 1795262784216
+            }
+          },
+          "vrr": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the EDID advertises no variable refresh range"
+          },
+          "color_formats": {
+            "state": "known",
+            "value": [
+              {
+                "format": "rgb",
+                "bit_depths": [
+                  8
+                ]
+              }
+            ],
+            "confidence": "measured",
+            "provenance": {
+              "layer": "sink_chain",
+              "source": {
+                "kind": "file",
+                "path": "/sys/class/drm/card0-Virtual-1/edid"
+              },
+              "read_at_ms": 1795262784216
+            }
+          },
+          "hdr": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the EDID has no HDR static metadata or dynamic HDR block (SDR display)"
+          },
+          "colorimetry": {
+            "state": "known",
+            "value": [
+              "default"
+            ],
+            "confidence": "measured",
+            "provenance": {
+              "layer": "sink_chain",
+              "source": {
+                "kind": "file",
+                "path": "/sys/class/drm/card0-Virtual-1/edid"
+              },
+              "read_at_ms": 1795262784216
+            }
+          },
+          "quantization": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "no CTA-861 video capability data block"
+          }
+        },
+        "link": {
+          "state": "known",
+          "value": {
+            "max_bpc": 8
+          },
+          "confidence": "measured",
+          "provenance": {
+            "layer": "sink_chain",
+            "source": {
+              "kind": "file",
+              "path": "/sys/class/drm/card0-Virtual-1/edid"
+            },
+            "read_at_ms": 1795262784216
+          }
+        },
+        "chain": {
+          "state": "unknown",
+          "reason": "not_implemented",
+          "detail": "devices in between are detected from the connector and link layers"
+        }
+      },
+      "layers": [
+        {
+          "layer": "sink_chain",
+          "availability": {
+            "state": "read"
+          },
+          "caps": {
+            "modes": {
+              "state": "known",
+              "value": [
+                {
+                  "width": 5120,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 742500,
+                    "h_total": 6600,
+                    "v_total": 2250
+                  },
+                  "vic": 125,
+                  "sources": [
+                    "cta_vic"
+                  ]
+                },
+                {
+                  "width": 4096,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 594000,
+                    "h_total": 5280,
+                    "v_total": 2250
+                  },
+                  "vic": 101,
+                  "sources": [
+                    "cta_vic"
+                  ]
+                },
+                {
+                  "width": 3840,
+                  "height": 2160,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 594000,
+                    "h_total": 4400,
+                    "v_total": 2250
+                  },
+                  "vic": 97,
+                  "sources": [
+                    "cta_vic"
+                  ]
+                },
+                {
+                  "width": 3840,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 594000,
+                    "h_total": 5280,
+                    "v_total": 2250
+                  },
+                  "vic": 96,
+                  "sources": [
+                    "cta_vic"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1440,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 234000,
+                    "h_total": 2600,
+                    "v_total": 1500
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                },
+                {
+                  "width": 2560,
+                  "height": 1080,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 185625,
+                    "h_total": 3300,
+                    "v_total": 1125
+                  },
+                  "vic": 89,
+                  "sources": [
+                    "cta_vic"
+                  ]
+                },
+                {
+                  "width": 1856,
+                  "height": 1392,
+                  "refresh_millihz": 59995,
+                  "timing": {
+                    "pixel_clock_khz": 218250,
+                    "h_total": 2528,
+                    "v_total": 1439
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                },
+                {
+                  "width": 1792,
+                  "height": 1344,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 204750,
+                    "h_total": 2448,
+                    "v_total": 1394
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                },
+                {
+                  "width": 2048,
+                  "height": 1152,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 162000,
+                    "h_total": 2250,
+                    "v_total": 1200
+                  },
+                  "sources": [
+                    "standard"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1200,
+                  "refresh_millihz": 59885,
+                  "timing": {
+                    "pixel_clock_khz": 193250,
+                    "h_total": 2592,
+                    "v_total": 1245
+                  },
+                  "sources": [
+                    "standard"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1080,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 148500,
+                    "h_total": 2200,
+                    "v_total": 1125
+                  },
+                  "sources": [
+                    "standard"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1080,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 148500,
+                    "h_total": 2640,
+                    "v_total": 1125
+                  },
+                  "vic": 31,
+                  "sources": [
+                    "cta_vic"
+                  ]
+                },
+                {
+                  "width": 1600,
+                  "height": 1200,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 162000,
+                    "h_total": 2160,
+                    "v_total": 1250
+                  },
+                  "sources": [
+                    "standard"
+                  ]
+                },
+                {
+                  "width": 1680,
+                  "height": 1050,
+                  "refresh_millihz": 59954,
+                  "timing": {
+                    "pixel_clock_khz": 146250,
+                    "h_total": 2240,
+                    "v_total": 1089
+                  },
+                  "sources": [
+                    "standard"
+                  ]
+                },
+                {
+                  "width": 1400,
+                  "height": 1050,
+                  "refresh_millihz": 59978,
+                  "timing": {
+                    "pixel_clock_khz": 121750,
+                    "h_total": 1864,
+                    "v_total": 1089
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 1024,
+                  "refresh_millihz": 60020,
+                  "timing": {
+                    "pixel_clock_khz": 108000,
+                    "h_total": 1688,
+                    "v_total": 1066
+                  },
+                  "sources": [
+                    "standard"
+                  ]
+                },
+                {
+                  "width": 1440,
+                  "height": 900,
+                  "refresh_millihz": 59887,
+                  "timing": {
+                    "pixel_clock_khz": 106500,
+                    "h_total": 1904,
+                    "v_total": 934
+                  },
+                  "sources": [
+                    "standard"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 960,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 108000,
+                    "h_total": 1800,
+                    "v_total": 1000
+                  },
+                  "sources": [
+                    "standard"
+                  ]
+                },
+                {
+                  "width": 1360,
+                  "height": 768,
+                  "refresh_millihz": 60015,
+                  "timing": {
+                    "pixel_clock_khz": 85500,
+                    "h_total": 1792,
+                    "v_total": 795
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 800,
+                  "refresh_millihz": 74994,
+                  "timing": {
+                    "pixel_clock_khz": 107300,
+                    "h_total": 1728,
+                    "v_total": 828
+                  },
+                  "preferred": true,
+                  "sources": [
+                    "detailed"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 768,
+                  "refresh_millihz": 59870,
+                  "timing": {
+                    "pixel_clock_khz": 79500,
+                    "h_total": 1664,
+                    "v_total": 798
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                },
+                {
+                  "width": 1024,
+                  "height": 768,
+                  "refresh_millihz": 60004,
+                  "timing": {
+                    "pixel_clock_khz": 65000,
+                    "h_total": 1344,
+                    "v_total": 806
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                },
+                {
+                  "width": 800,
+                  "height": 600,
+                  "refresh_millihz": 60317,
+                  "timing": {
+                    "pixel_clock_khz": 40000,
+                    "h_total": 1056,
+                    "v_total": 628
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                },
+                {
+                  "width": 640,
+                  "height": 480,
+                  "refresh_millihz": 59940,
+                  "timing": {
+                    "pixel_clock_khz": 25175,
+                    "h_total": 800,
+                    "v_total": 525
+                  },
+                  "sources": [
+                    "established"
+                  ]
+                }
+              ],
+              "confidence": "measured",
+              "provenance": {
+                "layer": "sink_chain",
+                "source": {
+                  "kind": "file",
+                  "path": "/sys/class/drm/card0-Virtual-1/edid"
+                },
+                "read_at_ms": 1795262784216
+              }
+            },
+            "vrr": {
+              "state": "unknown",
+              "reason": "not_exposed",
+              "detail": "the EDID advertises no variable refresh range"
+            },
+            "color_formats": {
+              "state": "known",
+              "value": [
+                {
+                  "format": "rgb",
+                  "bit_depths": [
+                    8
+                  ]
+                }
+              ],
+              "confidence": "measured",
+              "provenance": {
+                "layer": "sink_chain",
+                "source": {
+                  "kind": "file",
+                  "path": "/sys/class/drm/card0-Virtual-1/edid"
+                },
+                "read_at_ms": 1795262784216
+              }
+            },
+            "hdr": {
+              "state": "unknown",
+              "reason": "not_exposed",
+              "detail": "the EDID has no HDR static metadata or dynamic HDR block (SDR display)"
+            },
+            "colorimetry": {
+              "state": "known",
+              "value": [
+                "default"
+              ],
+              "confidence": "measured",
+              "provenance": {
+                "layer": "sink_chain",
+                "source": {
+                  "kind": "file",
+                  "path": "/sys/class/drm/card0-Virtual-1/edid"
+                },
+                "read_at_ms": 1795262784216
+              }
+            },
+            "quantization": {
+              "state": "unknown",
+              "reason": "not_exposed",
+              "detail": "no CTA-861 video capability data block"
+            }
+          }
+        },
+        {
+          "layer": "host_hardware",
+          "availability": {
+            "state": "read"
+          },
+          "caps": {},
+          "detail": {
+            "layer": "host_hardware",
+            "gpu": {
+              "state": "known",
+              "value": {
+                "card": "card0",
+                "pci_vendor": 6900,
+                "pci_device": 4176,
+                "pci_slot": "0000:00:01.0",
+                "vendor_name": "Red Hat (virtio)",
+                "driver": "virtio-pci"
+              },
+              "confidence": "measured",
+              "provenance": {
+                "layer": "host_hardware",
+                "source": {
+                  "kind": "file",
+                  "path": "/sys/class/drm/card0/device"
+                },
+                "read_at_ms": 1795262784216
+              }
+            },
+            "connector_index": 1
+          }
+        },
+        {
+          "layer": "kernel_driver",
+          "availability": {
+            "state": "read"
+          },
+          "caps": {},
+          "detail": {
+            "layer": "kernel_driver",
+            "driver": {
+              "state": "known",
+              "value": "virtio_gpu",
+              "confidence": "measured",
+              "provenance": {
+                "layer": "kernel_driver",
+                "source": {
+                  "kind": "command",
+                  "name": "drm_info"
+                },
+                "read_at_ms": 1795262784216
+              }
+            },
+            "parameters": {
+              "state": "known",
+              "value": [
+                {
+                  "name": "drm.edid_firmware",
+                  "value": ""
+                }
+              ],
+              "confidence": "measured",
+              "provenance": {
+                "layer": "kernel_driver",
+                "source": {
+                  "kind": "file",
+                  "path": "/sys/module"
+                },
+                "read_at_ms": 1795262784216
+              }
+            }
+          }
+        },
+        {
+          "layer": "kms",
+          "availability": {
+            "state": "read"
+          },
+          "caps": {
+            "modes": {
+              "state": "known",
+              "value": [
+                {
+                  "width": 1280,
+                  "height": 800,
+                  "refresh_millihz": 74994,
+                  "timing": {
+                    "pixel_clock_khz": 107300,
+                    "h_total": 1728,
+                    "v_total": 828,
+                    "h_sync_positive": false,
+                    "v_sync_positive": false
+                  },
+                  "preferred": true,
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 5120,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 742500,
+                    "h_total": 6600,
+                    "v_total": 2250,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 4096,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 594000,
+                    "h_total": 5280,
+                    "v_total": 2250,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 3840,
+                  "height": 2160,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 594000,
+                    "h_total": 4400,
+                    "v_total": 2250,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 3840,
+                  "height": 2160,
+                  "refresh_millihz": 59940,
+                  "timing": {
+                    "pixel_clock_khz": 593407,
+                    "h_total": 4400,
+                    "v_total": 2250,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 3840,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 594000,
+                    "h_total": 5280,
+                    "v_total": 2250,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1440,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 234000,
+                    "h_total": 2600,
+                    "v_total": 1500,
+                    "h_sync_positive": false,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 2560,
+                  "height": 1080,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 185625,
+                    "h_total": 3300,
+                    "v_total": 1125,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1856,
+                  "height": 1392,
+                  "refresh_millihz": 59995,
+                  "timing": {
+                    "pixel_clock_khz": 218250,
+                    "h_total": 2528,
+                    "v_total": 1439,
+                    "h_sync_positive": false,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1792,
+                  "height": 1344,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 204750,
+                    "h_total": 2448,
+                    "v_total": 1394,
+                    "h_sync_positive": false,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 2048,
+                  "height": 1152,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 162000,
+                    "h_total": 2250,
+                    "v_total": 1200,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1200,
+                  "refresh_millihz": 59885,
+                  "timing": {
+                    "pixel_clock_khz": 193250,
+                    "h_total": 2592,
+                    "v_total": 1245,
+                    "h_sync_positive": false,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1080,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 148500,
+                    "h_total": 2200,
+                    "v_total": 1125,
+                    "h_sync_positive": false,
+                    "v_sync_positive": false
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1080,
+                  "refresh_millihz": 50000,
+                  "timing": {
+                    "pixel_clock_khz": 148500,
+                    "h_total": 2640,
+                    "v_total": 1125,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1600,
+                  "height": 1200,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 162000,
+                    "h_total": 2160,
+                    "v_total": 1250,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1680,
+                  "height": 1050,
+                  "refresh_millihz": 59954,
+                  "timing": {
+                    "pixel_clock_khz": 146250,
+                    "h_total": 2240,
+                    "v_total": 1089,
+                    "h_sync_positive": false,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1400,
+                  "height": 1050,
+                  "refresh_millihz": 59978,
+                  "timing": {
+                    "pixel_clock_khz": 121750,
+                    "h_total": 1864,
+                    "v_total": 1089,
+                    "h_sync_positive": false,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 1024,
+                  "refresh_millihz": 60020,
+                  "timing": {
+                    "pixel_clock_khz": 108000,
+                    "h_total": 1688,
+                    "v_total": 1066,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1440,
+                  "height": 900,
+                  "refresh_millihz": 59887,
+                  "timing": {
+                    "pixel_clock_khz": 106500,
+                    "h_total": 1904,
+                    "v_total": 934,
+                    "h_sync_positive": false,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 960,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 108000,
+                    "h_total": 1800,
+                    "v_total": 1000,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1360,
+                  "height": 768,
+                  "refresh_millihz": 60015,
+                  "timing": {
+                    "pixel_clock_khz": 85500,
+                    "h_total": 1792,
+                    "v_total": 795,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 768,
+                  "refresh_millihz": 59870,
+                  "timing": {
+                    "pixel_clock_khz": 79500,
+                    "h_total": 1664,
+                    "v_total": 798,
+                    "h_sync_positive": false,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 1024,
+                  "height": 768,
+                  "refresh_millihz": 60004,
+                  "timing": {
+                    "pixel_clock_khz": 65000,
+                    "h_total": 1344,
+                    "v_total": 806,
+                    "h_sync_positive": false,
+                    "v_sync_positive": false
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 800,
+                  "height": 600,
+                  "refresh_millihz": 60317,
+                  "timing": {
+                    "pixel_clock_khz": 40000,
+                    "h_total": 1056,
+                    "v_total": 628,
+                    "h_sync_positive": true,
+                    "v_sync_positive": true
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 640,
+                  "height": 480,
+                  "refresh_millihz": 60000,
+                  "timing": {
+                    "pixel_clock_khz": 25200,
+                    "h_total": 800,
+                    "v_total": 525,
+                    "h_sync_positive": false,
+                    "v_sync_positive": false
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                },
+                {
+                  "width": 640,
+                  "height": 480,
+                  "refresh_millihz": 59940,
+                  "timing": {
+                    "pixel_clock_khz": 25175,
+                    "h_total": 800,
+                    "v_total": 525,
+                    "h_sync_positive": false,
+                    "v_sync_positive": false
+                  },
+                  "sources": [
+                    "kms"
+                  ]
+                }
+              ],
+              "confidence": "measured",
+              "provenance": {
+                "layer": "kms",
+                "source": {
+                  "kind": "command",
+                  "name": "drm_info"
+                },
+                "read_at_ms": 1795262784216
+              }
+            }
+          },
+          "detail": {
+            "layer": "kms",
+            "active_mode": {
+              "state": "known",
+              "value": {
+                "width": 1280,
+                "height": 800,
+                "refresh_millihz": 74994,
+                "timing": {
+                  "pixel_clock_khz": 107300,
+                  "h_total": 1728,
+                  "v_total": 828,
+                  "h_sync_positive": false,
+                  "v_sync_positive": false
+                },
+                "preferred": true,
+                "sources": [
+                  "kms"
+                ]
+              },
+              "confidence": "measured",
+              "provenance": {
+                "layer": "kms",
+                "source": {
+                  "kind": "command",
+                  "name": "drm_info"
+                },
+                "read_at_ms": 1795262784216
+              }
+            },
+            "vrr_enabled": {
+              "state": "known",
+              "value": false,
+              "confidence": "measured",
+              "provenance": {
+                "layer": "kms",
+                "source": {
+                  "kind": "command",
+                  "name": "drm_info"
+                },
+                "read_at_ms": 1795262784216
+              }
+            },
+            "link_status": {
+              "state": "known",
+              "value": "Good",
+              "confidence": "measured",
+              "provenance": {
+                "layer": "kms",
+                "source": {
+                  "kind": "command",
+                  "name": "drm_info"
+                },
+                "read_at_ms": 1795262784216
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
 }

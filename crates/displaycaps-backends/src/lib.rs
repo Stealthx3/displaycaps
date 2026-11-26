@@ -9,19 +9,49 @@
 //! - [`watch`]: change events for a watched scope (manual or timed triggers; hotplug and
 //!   compositor event sources arrive with their backends).
 //!
-//! The environment layer (os-release, kernel, sandbox, display session) is read here; the other
-//! layers report `unknown` with reason `not_implemented` until their backends exist (phases 3 to
-//! 6). Nothing outside the probe scope is read or reported.
+//! The environment layer (os-release, kernel, sandbox, display session), the sysfs DRM layers
+//! (sink chain, host hardware, kernel driver) and read-only KMS are read here; the link,
+//! compositor and decode layers report `unknown` with reason `not_implemented` until their
+//! backends exist (phases 4 to 6). Nothing outside the probe scope is read or reported.
 
+pub(crate) mod drm;
 mod environment;
 pub mod manifest;
 pub mod probe;
 pub mod root;
 pub mod runtime;
-pub mod sink;
 mod sandbox;
+pub mod sink;
 pub mod watch;
 
+pub use drm::kms_facts;
+
+/// Entry points for the fuzz targets (`fuzz/`): the backends' parsers of untrusted bytes. Not
+/// part of the API.
+#[doc(hidden)]
+pub mod fuzzing {
+    /// `drm_info -j` output (fixtures).
+    pub fn drm_info(data: &[u8]) {
+        if let Ok(cards) = crate::drm::kms::from_drm_info(data) {
+            for c in &cards {
+                for k in &c.connectors {
+                    let _ = crate::drm::kms::kms_state(c, k, &displaycaps_model::Selection::All, 0);
+                    let _ = crate::drm::kms::modes(k);
+                }
+            }
+        }
+    }
+
+    /// A kernel uevent message.
+    pub fn uevent(data: &[u8]) {
+        let _ = crate::drm::uevent::parse(data);
+    }
+
+    /// An `HDR_OUTPUT_METADATA` blob.
+    pub fn hdr_metadata(data: &[u8]) {
+        let _ = crate::drm::kms::decode_hdr_metadata(data);
+    }
+}
 pub use probe::{probe, probe_with};
 pub use root::SystemRoot;
 pub use runtime::{Backend, ProbeOptions, Runtime};

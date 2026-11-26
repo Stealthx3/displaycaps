@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-// Adapted from AudioCaps v1.0.0 (commit 049d053) crates/audiocaps-backends/src/probe.rs; reduced to
-// the environment layer. The other layers report unknown until their backends exist.
+// Adapted from AudioCaps v1.0.0 (commit 049d053) crates/audiocaps-backends/src/probe.rs; the audio
+// backends are replaced by the environment, sysfs DRM and KMS backends.
 //! The scoped probe: runs the backends the scope asks for as tasks on the runtime's executor,
 //! each with its own deadline, and assembles a [`Snapshot`].
 //!
-//! Only the environment layer has a backend so far. Every other layer in scope is reported
-//! `unknown` with reason `not_implemented`; no endpoint is discovered, so `endpoints` is empty.
-//! Nothing outside the scope is read: the environment is read only when the environment layer is
-//! in scope, and a layer outside the scope is not mentioned at all.
+//! Backends so far: environment, sysfs DRM (sink chain, host hardware, kernel driver) and
+//! read-only KMS. The link, compositor and decode layers report `unknown` with reason
+//! `not_implemented` until their phases. Nothing outside the scope is read: each backend runs only
+//! when one of its layers is in scope, and a layer outside the scope is not mentioned at all.
 
 use displaycaps_model::{
     Availability, EnvironmentInfo, LayerKind, ProbeScope, RedactionPolicy, SCHEMA_VERSION,
     Snapshot, SnapshotSource, SystemLayer, UnknownReason,
 };
 
+use std::collections::BTreeMap;
+
+use crate::drm::{self, KmsRead, SysRead};
 use crate::environment::{self, Env};
 use crate::root::SystemRoot;
 use crate::runtime::{self, Backend, ProbeOptions, Task};
@@ -34,6 +37,85 @@ pub fn probe_with(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOptions) ->
 struct Results {
     environment: Option<EnvironmentInfo>,
     environment_timed_out: bool,
+    sysfs: Option<SysRead>,
+    sysfs_timed_out: bool,
+    kms: Option<KmsRead>,
+    kms_timed_out: bool,
+}
+
+/// The sysfs DRM backend: one step lists the tree and reads what the scope asks for.
+struct SysfsTask<'a> {
+    root: &'a SystemRoot,
+    scope: &'a ProbeScope,
+    out: Option<SysRead>,
+}
+
+impl Task<Results> for SysfsTask<'_> {
+    fn backend(&self) -> Backend {
+        Backend::Sysfs
+    }
+
+    fn step(&mut self) -> bool {
+        self.out = Some(drm::read_sysfs(self.root, self.scope));
+        true
+    }
+
+    fn finish(self: Box<Self>, out: &mut Results, timed_out: bool) {
+        out.sysfs_timed_out = timed_out;
+        // A late result is dropped: the layers report the timeout, not data past its deadline.
+        out.sysfs = if timed_out { None } else { self.out };
+    }
+}
+
+/// The KMS backend: the first step plans from sysfs which cards to open (and what to read on
+/// each); every further step reads one card.
+struct KmsTask<'a> {
+    root: &'a SystemRoot,
+    scope: &'a ProbeScope,
+    access: drm::KmsAccess,
+    plans: Option<Vec<drm::CardPlan>>,
+    out: Option<KmsRead>,
+}
+
+impl Task<Results> for KmsTask<'_> {
+    fn backend(&self) -> Backend {
+        Backend::Kms
+    }
+
+    fn step(&mut self) -> bool {
+        if let drm::KmsAccess::No(r, d) = &self.access {
+            self.out = Some(KmsRead::Unreadable(*r, d.clone()));
+            return true;
+        }
+        let Some(plans) = &mut self.plans else {
+            let live = matches!(self.access, drm::KmsAccess::Live);
+            match drm::kms_plan(self.root, self.scope, live) {
+                Ok((plans, skipped)) => {
+                    self.out = Some(KmsRead::Cards(skipped));
+                    self.plans = Some(plans);
+                    return false;
+                }
+                Err((r, d)) => {
+                    self.out = Some(KmsRead::Unreadable(r, d));
+                    return true;
+                }
+            }
+        };
+        let Some(plan) = plans.pop() else {
+            return true;
+        };
+        let res = drm::read_planned(self.root, &self.access, &plan);
+        if let Some(KmsRead::Cards(v)) = &mut self.out {
+            v.push(res);
+        }
+        plans.is_empty()
+    }
+
+    fn finish(self: Box<Self>, out: &mut Results, timed_out: bool) {
+        out.kms_timed_out = timed_out;
+        // A late result is dropped: the layer reports the timeout, not data past its deadline.
+        out.kms = if timed_out { None } else { self.out };
+    }
 }
 
 /// The environment backend: one step reads everything.
@@ -73,14 +155,65 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
             out: None,
         }));
     }
+    if drm::in_scope(scope) {
+        tasks.push(Box::new(SysfsTask {
+            root,
+            scope,
+            out: None,
+        }));
+    }
+    if scope.layers.includes(&LayerKind::Kms) {
+        tasks.push(Box::new(KmsTask {
+            root,
+            scope,
+            access: drm::kms_access(root, &env),
+            plans: None,
+            out: None,
+        }));
+    }
     runtime::run(tasks, opts, &mut res);
+
+    let (endpoints, mut drm_avail) = if drm::in_scope(scope) {
+        let quirks = if scope.layers.includes(&LayerKind::SinkChain) {
+            drm::quirks(root, opts)
+        } else {
+            Default::default()
+        };
+        let sys = res.sysfs.take().unwrap_or_default();
+        let kms = match res.kms.take() {
+            Some(k) => k,
+            None if res.kms_timed_out => {
+                KmsRead::Unreadable(UnknownReason::Timeout, "KMS backend deadline".into())
+            }
+            None => KmsRead::NotInScope,
+        };
+        drm::endpoints(scope, &sys, &kms, &quirks, now)
+    } else {
+        (vec![], BTreeMap::new())
+    };
+    if res.sysfs_timed_out {
+        for l in [
+            LayerKind::SinkChain,
+            LayerKind::HostHardware,
+            LayerKind::KernelDriver,
+        ] {
+            if let Some(a) = drm_avail.get_mut(&l) {
+                *a = Availability::Unknown {
+                    reason: UnknownReason::Timeout,
+                    detail: Some("sysfs backend deadline".into()),
+                };
+            }
+        }
+    }
 
     let layers = LayerKind::ALL
         .iter()
         .filter(|l| scope.layers.includes(l))
         .map(|&layer| SystemLayer {
             layer,
-            availability: availability(layer, &res),
+            availability: drm_avail
+                .remove(&layer)
+                .unwrap_or_else(|| availability(layer, &res)),
         })
         .collect();
     let mut snap = Snapshot {
@@ -97,7 +230,7 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
         redaction: RedactionPolicy::default(),
         layers,
         environment: res.environment,
-        endpoints: vec![],
+        endpoints,
         content: opts.content.clone(),
         recommendations: vec![],
         findings: vec![],
@@ -172,13 +305,15 @@ mod tests {
         assert_eq!(s.layers.len(), 1);
         assert_eq!(s.layers[0].layer, LayerKind::SinkChain);
         assert!(s.environment.is_none(), "environment layer is not in scope");
+        // The fixture has no /sys/class/drm: unknown with the reason, never "unsupported".
         assert!(matches!(
             avail(&s, LayerKind::SinkChain),
             Availability::Unknown {
-                reason: UnknownReason::NotImplemented,
+                reason: UnknownReason::NotExposed,
                 ..
             }
         ));
+        assert!(s.endpoints.is_empty());
     }
 
     #[test]
@@ -208,13 +343,27 @@ mod tests {
         for l in LayerKind::ALL {
             match (l, avail(&s, l)) {
                 (LayerKind::Environment, Availability::Partial) => {}
+                // Built layers whose source the fixture lacks (no /sys/class/drm, no drm_info).
+                (
+                    LayerKind::SinkChain
+                    | LayerKind::HostHardware
+                    | LayerKind::KernelDriver
+                    | LayerKind::Kms,
+                    Availability::Unknown {
+                        reason: UnknownReason::NotExposed,
+                        ..
+                    },
+                ) => {}
                 (
                     _,
                     Availability::Unknown {
                         reason: UnknownReason::NotImplemented,
                         ..
                     },
-                ) if l != LayerKind::Environment => {}
+                ) if matches!(
+                    l,
+                    LayerKind::Link | LayerKind::Compositor | LayerKind::Decode
+                ) => {}
                 (l, a) => panic!("{l:?}: {a:?}"),
             }
         }
@@ -229,6 +378,91 @@ mod tests {
             }
         );
         assert_eq!(s.taken_at_ms, 1_000);
+    }
+
+    fn lab(name: &str) -> SystemRoot {
+        SystemRoot::fixture(format!(
+            "{}/../../tests/fixtures/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn drm_endpoints_from_a_capture() {
+        let s = probe(&lab("lab-gnome"), &ProbeScope::everything());
+        assert_eq!(s.endpoints.len(), 1);
+        let e = &s.endpoints[0];
+        assert_eq!(e.id.0, "card0-Virtual-1");
+        assert_eq!(e.class, displaycaps_model::EndpointClass::Virtual);
+        assert!(e.sink.is_some(), "QEMU's EDID gives a sink record");
+        let kinds: Vec<_> = e.layers.iter().map(|l| l.layer).collect();
+        assert_eq!(
+            kinds,
+            [
+                LayerKind::SinkChain,
+                LayerKind::HostHardware,
+                LayerKind::KernelDriver,
+                LayerKind::Kms
+            ]
+        );
+        let kms = e.layers.iter().find(|l| l.layer == LayerKind::Kms).unwrap();
+        assert_eq!(kms.availability, Availability::Read);
+        let Some(displaycaps_model::LayerDetail::Kms(k)) = &kms.detail else {
+            panic!("kms detail")
+        };
+        assert_eq!(k.active_mode.known().unwrap().as_ref().unwrap().width, 1280);
+        use displaycaps_model::CorrelationId as C;
+        assert!(
+            e.correlation
+                .iter()
+                .any(|c| matches!(&c.id, C::KmsCrtc { id: 36, .. }))
+        );
+        assert!(
+            e.correlation
+                .iter()
+                .any(|c| matches!(&c.id, C::SinkKey { .. }))
+        );
+        for l in [
+            LayerKind::SinkChain,
+            LayerKind::HostHardware,
+            LayerKind::KernelDriver,
+            LayerKind::Kms,
+        ] {
+            assert_eq!(avail(&s, l), &Availability::Read, "{l:?}");
+        }
+    }
+
+    #[test]
+    fn drm_scope_is_respected() {
+        use displaycaps_model::{EndpointClass, FieldGroup};
+        // Only KMS VRR state: no sink, no hardware detail, no EDID read.
+        let scope = ProbeScope::nothing()
+            .with_class(EndpointClass::Virtual)
+            .with_layer(LayerKind::Kms)
+            .with_field(FieldGroup::Vrr);
+        let s = probe(&lab("lab-gnome"), &scope);
+        let e = &s.endpoints[0];
+        assert!(e.sink.is_none() && e.correlation.is_empty());
+        assert_eq!(e.layers.len(), 1);
+        let Some(displaycaps_model::LayerDetail::Kms(k)) = &e.layers[0].detail else {
+            panic!("kms detail")
+        };
+        assert!(k.vrr_enabled.is_some() && k.link_status.is_none());
+        assert!(e.layers[0].caps.modes.is_none());
+        // External connectors only: the virtual one is out of scope and not reported.
+        let scope = ProbeScope::everything();
+        let scope = displaycaps_model::ProbeScope {
+            endpoint_classes: displaycaps_model::Selection::Only(vec![EndpointClass::External]),
+            ..scope
+        };
+        assert!(probe(&lab("lab-gnome"), &scope).endpoints.is_empty());
+        // Environment only: sysfs is not read at all.
+        let s = probe(
+            &lab("lab-gnome"),
+            &ProbeScope::nothing().with_layer(LayerKind::Environment),
+        );
+        assert!(s.endpoints.is_empty());
     }
 
     #[test]

@@ -27,7 +27,9 @@ regex = "1"
 tar = "0.4"
 flate2 = "1"
 expect-test = "1"
-nix = { version = "0.31", default-features = false, features = ["poll"] }
+nix = { version = "0.31", default-features = false, features = ["poll", "socket", "uio"] }
+drm = "0.15"
+drm-ffi = "0.9"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

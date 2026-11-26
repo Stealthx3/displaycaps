@@ -174,6 +174,18 @@ fn sandbox(root: &SystemRoot, env: &Env, now: u64) -> Value<Sandbox> {
     Value::measured(Sandbox::None, p)
 }
 
+/// The session kind from `XDG_SESSION_TYPE`, `WAYLAND_DISPLAY` and `DISPLAY` (`None` when the
+/// environment is absent or names no display session).
+pub(crate) fn session_kind(env: &Env) -> SessionKind {
+    match env.get("XDG_SESSION_TYPE").as_deref() {
+        Some("wayland") => SessionKind::Wayland,
+        Some("x11") => SessionKind::X11,
+        _ if env.get("WAYLAND_DISPLAY").is_some() => SessionKind::Wayland,
+        _ if env.get("DISPLAY").is_some() => SessionKind::X11,
+        _ => SessionKind::None,
+    }
+}
+
 /// The display session, from `XDG_SESSION_TYPE`, `WAYLAND_DISPLAY` and `DISPLAY`.
 fn session(env: &Env, now: u64) -> Value<SessionInfo> {
     if env.is_absent() {
@@ -182,13 +194,7 @@ fn session(env: &Env, now: u64) -> Value<SessionInfo> {
             Some("environment variables are not captured".into()),
         );
     }
-    let kind = match env.get("XDG_SESSION_TYPE").as_deref() {
-        Some("wayland") => SessionKind::Wayland,
-        Some("x11") => SessionKind::X11,
-        _ if env.get("WAYLAND_DISPLAY").is_some() => SessionKind::Wayland,
-        _ if env.get("DISPLAY").is_some() => SessionKind::X11,
-        _ => SessionKind::None,
-    };
+    let kind = session_kind(env);
     Value::inferred(
         SessionInfo {
             kind,

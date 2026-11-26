@@ -10,7 +10,7 @@
 set -uo pipefail
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 cd "$(dirname "$0")/.."
-TARGETS=(edid cta_video displayid timing os_release rule_pack)
+TARGETS=(edid cta_video displayid timing os_release rule_pack drm_info uevent hdr_metadata)
 F=fuzz
 
 seed_files() { # target dir pattern...
@@ -50,6 +50,12 @@ case "${1:-}" in
     mkdir -p "$F/corpus/os_release"
     find tests/fixtures -name os-release -size +0 | while read -r p; do cp "$p" "$F/corpus/os_release/seed-$(sha256sum "$p" | cut -c1-16)"; done
     mkdir -p "$F/corpus/rule_pack"; for p in crates/displaycaps-rules/packs/*.json; do cp "$p" "$F/corpus/rule_pack/seed-$(basename "$p")"; done
+    seed_files drm_info -name drm_info.json
+    mkdir -p "$F/corpus/uevent" "$F/corpus/hdr_metadata"
+    printf 'change@/devices/pci0000:00/0000:00:01.0/drm/card0\0ACTION=change\0SUBSYSTEM=drm\0HOTPLUG=1\0CONNECTOR=37\0' >"$F/corpus/uevent/seed-hotplug"
+    printf 'add@/devices/pci0000:00/0000:00:01.0/drm/card1\0ACTION=add\0SUBSYSTEM=drm\0DEVNAME=dri/card1\0' >"$F/corpus/uevent/seed-add"
+    # A PQ static-metadata blob (type 0, EOTF 2, 1000/0.005 nits, MaxCLL 800, MaxFALL 400).
+    printf '\x00\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xe8\x03\x32\x00\x20\x03\x90\x01\x00\x00' >"$F/corpus/hdr_metadata/seed-pq"
     for t in "${TARGETS[@]}"; do echo "$t: $(ls "$F/corpus/$t" 2>/dev/null | wc -l) seeds"; done
     ;;
   start)
