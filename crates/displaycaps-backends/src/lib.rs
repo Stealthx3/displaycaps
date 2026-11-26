@@ -25,6 +25,8 @@ pub mod sink;
 pub mod watch;
 
 pub use drm::kms_facts;
+#[doc(hidden)]
+pub use drm::link::{Scenario as LinkScenario, explain as explain_link};
 
 /// Entry points for the fuzz targets (`fuzz/`): the backends' parsers of untrusted bytes. Not
 /// part of the API.

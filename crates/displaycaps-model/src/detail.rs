@@ -173,6 +173,24 @@ pub struct LinkState {
     /// Devices between the GPU and the sink that limit the link (adapter, dock, MST).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limited_by: Vec<String>,
+    /// Better formats the link could not carry, best first, each with the reason: what explains a
+    /// fallback (e.g. RGB 10-bit rejected because FRL is off in the driver).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rejected: Vec<RejectedFormat>,
+}
+
+/// A link format that was not used, and why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct RejectedFormat {
+    /// Colour format.
+    pub color_format: ColorFormat,
+    /// Bits per component.
+    pub bit_depth: u8,
+    /// With DSC.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dsc: bool,
+    /// Why it was not used.
+    pub reason: String,
 }
 
 /// The physical signal.

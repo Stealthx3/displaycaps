@@ -162,7 +162,7 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
             out: None,
         }));
     }
-    if scope.layers.includes(&LayerKind::Kms) {
+    if scope.layers.includes(&LayerKind::Kms) || scope.layers.includes(&LayerKind::Link) {
         tasks.push(Box::new(KmsTask {
             root,
             scope,
@@ -174,7 +174,9 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
     runtime::run(tasks, opts, &mut res);
 
     let (endpoints, mut drm_avail) = if drm::in_scope(scope) {
-        let quirks = if scope.layers.includes(&LayerKind::SinkChain) {
+        let quirks = if scope.layers.includes(&LayerKind::SinkChain)
+            || scope.layers.includes(&LayerKind::Link)
+        {
             drm::quirks(root, opts)
         } else {
             Default::default()
@@ -348,7 +350,8 @@ mod tests {
                     LayerKind::SinkChain
                     | LayerKind::HostHardware
                     | LayerKind::KernelDriver
-                    | LayerKind::Kms,
+                    | LayerKind::Kms
+                    | LayerKind::Link,
                     Availability::Unknown {
                         reason: UnknownReason::NotExposed,
                         ..
@@ -360,10 +363,7 @@ mod tests {
                         reason: UnknownReason::NotImplemented,
                         ..
                     },
-                ) if matches!(
-                    l,
-                    LayerKind::Link | LayerKind::Compositor | LayerKind::Decode
-                ) => {}
+                ) if matches!(l, LayerKind::Compositor | LayerKind::Decode) => {}
                 (l, a) => panic!("{l:?}: {a:?}"),
             }
         }
@@ -403,9 +403,24 @@ mod tests {
                 LayerKind::SinkChain,
                 LayerKind::HostHardware,
                 LayerKind::KernelDriver,
-                LayerKind::Kms
+                LayerKind::Kms,
+                LayerKind::Link
             ]
         );
+        // A virtual output: the link is virtual, worked out from the KMS mode.
+        let link = e
+            .layers
+            .iter()
+            .find(|l| l.layer == LayerKind::Link)
+            .unwrap();
+        let Some(displaycaps_model::LayerDetail::Link(ls)) = &link.detail else {
+            panic!("link detail")
+        };
+        assert_eq!(
+            ls.signal.known(),
+            Some(&displaycaps_model::LinkSignal::Virtual)
+        );
+        assert_eq!(ls.bit_depth.known(), Some(&8));
         let kms = e.layers.iter().find(|l| l.layer == LayerKind::Kms).unwrap();
         assert_eq!(kms.availability, Availability::Read);
         let Some(displaycaps_model::LayerDetail::Kms(k)) = &kms.detail else {

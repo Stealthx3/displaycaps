@@ -58,8 +58,8 @@
       "layer": "link",
       "availability": {
         "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "reason": "not_exposed",
+        "detail": "the capture has no drm_info output (taken outside a display session)"
       }
     },
     {
@@ -266,6 +266,15 @@
         },
         {
           "layer": "kms",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
+        },
+        {
+          "layer": "link",
           "availability": {
             "state": "unknown",
             "reason": "not_exposed",
@@ -1787,6 +1796,15 @@
             "detail": "the capture has no drm_info output (taken outside a display session)"
           },
           "caps": {}
+        },
+        {
+          "layer": "link",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
         }
       ]
     },
@@ -2836,6 +2854,15 @@
             "detail": "the capture has no drm_info output (taken outside a display session)"
           },
           "caps": {}
+        },
+        {
+          "layer": "link",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
         }
       ]
     },
@@ -2967,6 +2994,15 @@
         },
         {
           "layer": "kms",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
+        },
+        {
+          "layer": "link",
           "availability": {
             "state": "unknown",
             "reason": "not_exposed",

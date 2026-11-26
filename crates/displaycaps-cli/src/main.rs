@@ -43,6 +43,15 @@ USAGE:
       Watch the live system (default: every layer) and print one JSON line per change: its
       causes (hotplug, kms_change, ...), the re-probe latency and the diff. Stops after N events
       (default 1) or S seconds (default 60). --kms-poll turns on the KMS change poll.
+  displaycaps link <edid-file> --mode WxH@HZ [--connector hdmi|dp] [--subconnector NAME]
+                   [--driver NAME] [--kernel X.Y] [--param MODULE.NAME=VALUE]...
+                   [--max-bpc N] [--color-format auto|rgb|444|422|420]
+                   [--gpu-tmds MHZ] [--gpu-frl LANESxGBPS] [--gpu-dsc yes|no]
+                   [--sink-frl LANESxGBPS] [--sink-vic N]... [--json]
+      Simulate a link without hardware: the format the driver would send for that mode, and
+      every better format with the reason it doesn't fit (defaults: hdmi, amdgpu, kernel 7.4,
+      max bpc 10, automatic format; the GPU's limits unknown unless given). --sink-frl and
+      --sink-vic simulate a sink with an FRL rate or CTA-861 modes its EDID lacks.
   displaycaps kms-facts [--drm-info FILE]
       Print KMS state as normalized fact lines, read with this library's read-only ioctls (only
       inside a display session), or from a `drm_info -j` file. Lab tooling for the KMS gate.
@@ -62,6 +71,7 @@ fn main() -> ExitCode {
             .map(|n| println!("{n} files re-redacted")),
         Some("kms-facts") => cmd_kms_facts(&args[1..]),
         Some("watch") => cmd_watch(&args[1..]),
+        Some("link") => cmd_link(&args[1..]),
         Some("replay") if args.len() == 2 => SystemRoot::fixture(&args[1])
             .map_err(|e| e.to_string())
             .map(|r| print_snapshot(&r)),
@@ -297,6 +307,165 @@ fn cmd_watch(args: &[String]) -> Result<(), String> {
                 "diff": ev.diff,
             })
         );
+    }
+    Ok(())
+}
+
+fn cmd_link(args: &[String]) -> Result<(), String> {
+    use displaycaps_model::{ColorFormat, ConnectorType, FrlRate, LayerDetail, LinkSignal};
+    let usage =
+        "usage: displaycaps link <edid-file> --mode WxH@HZ [options] (see displaycaps --help)";
+    let (file, rest) = args.split_first().ok_or(usage)?;
+    let mut sc = displaycaps_backends::LinkScenario {
+        edid: std::fs::read(file).map_err(|e| format!("{file}: {e}"))?,
+        mode: (0, 0, 0),
+        connector: ConnectorType::Hdmi,
+        subconnector: None,
+        driver: "amdgpu".into(),
+        kernel: "7.4".into(),
+        params: vec![],
+        max_bpc: Some(10),
+        color_format: None,
+        source_tmds_khz: None,
+        source_frl: None,
+        source_dsc: None,
+        sink_frl: None,
+        sink_vics: vec![],
+    };
+    let frl_arg = |v: String, what: &str| -> Result<FrlRate, String> {
+        let (l, g) = v.split_once('x').ok_or(format!("{what} LANESxGBPS"))?;
+        Ok(FrlRate {
+            lanes: l.parse().map_err(|_| format!("{what}: lanes"))?,
+            gbps_per_lane: g.parse().map_err(|_| format!("{what}: rate"))?,
+        })
+    };
+    let mut json = false;
+    let mut it = rest.iter();
+    while let Some(a) = it.next() {
+        let mut val = || it.next().cloned().ok_or(format!("{a} needs a value"));
+        match a.as_str() {
+            "--mode" => {
+                let v = val()?;
+                let (wh, hz) = v.split_once('@').ok_or("--mode WxH@HZ")?;
+                let (w, h) = wh.split_once('x').ok_or("--mode WxH@HZ")?;
+                let hz: f64 = hz.parse().map_err(|_| "--mode: refresh")?;
+                sc.mode = (
+                    w.parse().map_err(|_| "--mode: width")?,
+                    h.parse().map_err(|_| "--mode: height")?,
+                    (hz * 1000.0).round() as u32,
+                );
+            }
+            "--connector" => {
+                sc.connector = match val()?.as_str() {
+                    "hdmi" => ConnectorType::Hdmi,
+                    "dp" => ConnectorType::DisplayPort,
+                    o => return Err(format!("--connector: {o}")),
+                }
+            }
+            "--driver" => sc.driver = val()?,
+            "--kernel" => sc.kernel = val()?,
+            "--param" => {
+                let v = val()?;
+                let (n, x) = v.split_once('=').ok_or("--param MODULE.NAME=VALUE")?;
+                sc.params.push((n.to_string(), x.to_string()));
+            }
+            "--max-bpc" => sc.max_bpc = Some(val()?.parse().map_err(|_| "--max-bpc: number")?),
+            "--subconnector" => sc.subconnector = Some(val()?),
+            "--gpu-tmds" => {
+                sc.source_tmds_khz =
+                    Some(val()?.parse::<u32>().map_err(|_| "--gpu-tmds: MHz")? * 1000)
+            }
+            "--gpu-frl" => sc.source_frl = Some(frl_arg(val()?, "--gpu-frl")?),
+            "--gpu-dsc" => sc.source_dsc = Some(val()? == "yes"),
+            "--color-format" => {
+                sc.color_format = match val()?.as_str() {
+                    "auto" => None,
+                    "rgb" => Some(ColorFormat::Rgb),
+                    "444" => Some(ColorFormat::Ycbcr444),
+                    "422" => Some(ColorFormat::Ycbcr422),
+                    "420" => Some(ColorFormat::Ycbcr420),
+                    o => return Err(format!("--color-format: {o}")),
+                }
+            }
+            "--sink-frl" => sc.sink_frl = Some(frl_arg(val()?, "--sink-frl")?),
+            "--sink-vic" => sc
+                .sink_vics
+                .push(val()?.parse().map_err(|_| "--sink-vic: number")?),
+            "--json" => json = true,
+            o => return Err(format!("unknown option {o}")),
+        }
+    }
+    if sc.mode.0 == 0 {
+        return Err(usage.into());
+    }
+    let layer = displaycaps_backends::explain_link(&sc)?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&layer).expect("serializes")
+        );
+        return Ok(());
+    }
+    let Some(LayerDetail::Link(ls)) = &layer.detail else {
+        return Err(format!("no link: {:?}", layer.availability));
+    };
+    let fmt = |f: &ColorFormat| match f {
+        ColorFormat::Rgb => "RGB",
+        ColorFormat::Ycbcr444 => "YCbCr 4:4:4",
+        ColorFormat::Ycbcr422 => "YCbCr 4:2:2",
+        ColorFormat::Ycbcr420 => "YCbCr 4:2:0",
+    };
+    let signal = match ls.signal.known() {
+        Some(LinkSignal::Tmds { character_rate_khz }) => {
+            format!("TMDS {:.1} MHz", f64::from(*character_rate_khz) / 1000.0)
+        }
+        Some(LinkSignal::Frl { rate }) => {
+            format!("FRL {}x{} Gbit/s", rate.lanes, rate.gbps_per_lane)
+        }
+        Some(LinkSignal::DisplayPort { link }) => format!("DP {}x{:?}", link.lanes, link.rate),
+        Some(LinkSignal::Virtual) => "virtual".into(),
+        None => "none".into(),
+    };
+    match (ls.color_format.known(), ls.bit_depth.known()) {
+        (Some(f), Some(b)) => {
+            let need = ls
+                .required_kbps
+                .known()
+                .map(|k| *k as f64 / 1e6)
+                .unwrap_or(0.0);
+            let cap = ls
+                .capacity_kbps
+                .known()
+                .map(|k| *k as f64 / 1e6)
+                .unwrap_or(0.0);
+            println!(
+                "link:     {} {b}-bit over {signal} ({need:.2} of {cap:.2} Gbit/s, inferred)",
+                fmt(f)
+            );
+        }
+        _ => println!(
+            "link:     unknown ({})",
+            match &ls.color_format {
+                displaycaps_model::Value::Unknown { detail, .. } =>
+                    detail.clone().unwrap_or_default(),
+                _ => String::new(),
+            }
+        ),
+    }
+    if !matches!(layer.availability, displaycaps_model::Availability::Read) {
+        println!("state:    {:?}", layer.availability);
+    }
+    for r in &ls.rejected {
+        println!(
+            "rejected: {} {}-bit{}: {}",
+            fmt(&r.color_format),
+            r.bit_depth,
+            if r.dsc { " with DSC" } else { "" },
+            r.reason
+        );
+    }
+    for l in &ls.limited_by {
+        println!("limited:  {l}");
     }
     Ok(())
 }

@@ -13,6 +13,7 @@
 
 pub(crate) mod kms;
 mod kms_live;
+pub mod link;
 pub(crate) mod sysfs;
 pub(crate) mod uevent;
 
@@ -21,8 +22,8 @@ use std::collections::BTreeMap;
 use displaycaps_model::{
     Availability, CapabilitySet, Confidence, ConnectionStatus, CorrelationId, CorrelationKey,
     DriverDetail, Endpoint, EndpointId, FieldGroup, Gpu, HostDetail, LayerCapabilities,
-    LayerDetail, LayerKind, ModuleParameter, ProbeScope, Provenance, SessionKind, Source,
-    UnknownReason, Value,
+    LayerDetail, LayerKind, ModuleParameter, ProbeScope, Provenance, Selection, SessionKind,
+    Source, UnknownReason, Value,
 };
 use displaycaps_rules::quirks::QuirkSet;
 
@@ -33,12 +34,19 @@ use kms::{KmsCard, KmsConnector};
 use sysfs::{SysCard, SysConnector};
 
 /// The layers an endpoint is built from. If none is in scope, `/sys/class/drm` is not read.
-pub(crate) const ENDPOINT_LAYERS: [LayerKind; 4] = [
+pub(crate) const ENDPOINT_LAYERS: [LayerKind; 5] = [
     LayerKind::SinkChain,
     LayerKind::HostHardware,
     LayerKind::KernelDriver,
     LayerKind::Kms,
+    LayerKind::Link,
 ];
+
+/// Whether the link layer is in scope. It is worked out from the sink's EDID, KMS and the
+/// driver's state, so those are read for it even when their own layers are not reported.
+pub(crate) fn link_in_scope(scope: &ProbeScope) -> bool {
+    scope.layers.includes(&LayerKind::Link)
+}
 
 /// Whether the scope needs the DRM backends at all.
 pub(crate) fn in_scope(scope: &ProbeScope) -> bool {
@@ -55,8 +63,10 @@ pub(crate) struct SysRead {
     pub tree: Option<SysTree>,
     /// EDID bytes per connector name (connected connectors in scope only).
     pub edids: BTreeMap<String, Result<Vec<u8>, (UnknownReason, String)>>,
-    /// Module parameters per module (driver detail only).
+    /// Module parameters per card (driver detail or the link layer only).
     pub params: BTreeMap<String, Vec<ModuleParameter>>,
+    /// The kernel release (driver detail or the link layer only).
+    pub kernel: Option<String>,
 }
 
 /// What the KMS backend reads on one card.
@@ -189,7 +199,8 @@ pub(crate) fn kms_plan(
 ) -> Result<(Vec<CardPlan>, Vec<CardResult>), (UnknownReason, String)> {
     let (cards, conns) =
         sysfs::scan(root).map_err(|e| (io_reason(&e), format!("{}: {e}", sysfs::CLASS)))?;
-    let sink = scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope);
+    let sink =
+        scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope) || link_in_scope(scope);
     let mut plans = vec![];
     let mut skipped = vec![];
     for card in &cards {
@@ -430,7 +441,8 @@ pub(crate) fn read_sysfs(root: &SystemRoot, scope: &ProbeScope) -> SysRead {
     let mut out = SysRead::default();
     let tree = sysfs::scan(root).map_err(|e| (io_reason(&e), format!("{}: {e}", sysfs::CLASS)));
     if let Ok((cards, conns)) = &tree {
-        if scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope) {
+        if scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope) || link_in_scope(scope)
+        {
             for c in conns.iter().filter(|c| connector_in_scope(scope, c)) {
                 if c.status == Some(ConnectionStatus::Connected) {
                     out.edids.insert(
@@ -441,16 +453,24 @@ pub(crate) fn read_sysfs(root: &SystemRoot, scope: &ProbeScope) -> SysRead {
                 }
             }
         }
-        if scope.layers.includes(&LayerKind::KernelDriver)
-            && scope.fields.includes(&FieldGroup::Driver)
-        {
+        let detail = scope.layers.includes(&LayerKind::KernelDriver)
+            && scope.fields.includes(&FieldGroup::Driver);
+        if detail || link_in_scope(scope) {
+            out.kernel = root
+                .read_string("/proc/sys/kernel/osrelease")
+                .ok()
+                .map(|s| s.trim().to_string());
             for card in cards {
                 let Some(driver) = &card.driver else { continue };
                 for (module, param) in sysfs::display_parameters(driver) {
+                    let name = format!("{module}.{param}");
+                    // For the link alone, only the parameters it needs.
+                    if !detail && !link::LINK_PARAMETERS.contains(&name.as_str()) {
+                        continue;
+                    }
                     let path = format!("/sys/module/{module}/parameters/{param}");
                     if let Ok(v) = root.read_string(&path) {
                         let list = out.params.entry(card.name.clone()).or_default();
-                        let name = format!("{module}.{param}");
                         if !list.iter().any(|p| p.name == name) {
                             list.push(ModuleParameter {
                                 name,
@@ -567,8 +587,8 @@ pub(crate) fn endpoints(
                 _ => (UnknownReason::Timeout, "sysfs not read".into()),
             };
             for l in ENDPOINT_LAYERS.iter().filter(|l| lay(**l)) {
-                // KMS has its own source; it stays readable without sysfs.
-                if *l != LayerKind::Kms {
+                // KMS (and the link inferred from it) has its own source.
+                if !matches!(l, LayerKind::Kms | LayerKind::Link) {
                     avail.insert(
                         *l,
                         Availability::Unknown {
@@ -578,8 +598,10 @@ pub(crate) fn endpoints(
                     );
                 }
             }
-            if lay(LayerKind::Kms) {
-                avail.insert(LayerKind::Kms, kms_availability(kms));
+            for l in [LayerKind::Kms, LayerKind::Link] {
+                if lay(l) {
+                    avail.insert(l, kms_availability(kms));
+                }
             }
             return (vec![], avail);
         }
@@ -589,6 +611,7 @@ pub(crate) fn endpoints(
     let mut edid_trouble = false;
     for c in conns {
         let ctype = sysfs::connector_type(&c.kind);
+        let ctype_for_chain = ctype.clone();
         let class = sysfs::class(&ctype);
         let id = EndpointId(c.name.clone());
         if !scope.includes_endpoint(class, &id) {
@@ -619,6 +642,46 @@ pub(crate) fn endpoints(
             paths: vec![],
         };
         // The sink, from the cached EDID (sysfs first, then the KMS blob).
+        let edid_src: Option<(&[u8], Source)> = match (
+            sys.edids.get(&c.name),
+            km.and_then(|(_, k)| k.prop("EDID"))
+                .and_then(|p| p.blob.as_ref()),
+        ) {
+            (Some(Ok(raw)), _) if !raw.is_empty() => Some((raw.as_slice(), file(c.edid_path()))),
+            (_, Some(b)) if !b.is_empty() => Some((
+                b.as_slice(),
+                Source::KmsProperty {
+                    object: format!("connector {}", km.map(|(_, k)| k.id).unwrap_or(0)),
+                    property: "EDID".into(),
+                },
+            )),
+            _ => None,
+        };
+        // Every field, for the link and for devices in the chain; reported only through `sink`.
+        let sink_full = (lay(LayerKind::Link) || lay(LayerKind::SinkChain))
+            .then(|| {
+                edid_src.as_ref().and_then(|(raw, src)| {
+                    crate::sink::sink_record(raw, src.clone(), now, &Selection::All, quirks)
+                })
+            })
+            .flatten();
+        let mst = km
+            .and_then(|(_, k)| k.prop("PATH"))
+            .is_some_and(|p| p.raw != 0);
+        let driver_name: Option<String> = km
+            .map(|(k, _)| k.driver.clone())
+            .filter(|d| !d.is_empty())
+            .or_else(|| card.and_then(|k| k.driver.clone()))
+            .map(|d| link::normalize_driver(&d).to_string());
+        let subconnector: Option<String> = km
+            .and_then(|(_, k)| k.prop("subconnector"))
+            .and_then(|p| p.enum_name.clone());
+        let params = sys.params.get(&c.card).cloned().unwrap_or_default();
+        let frl = link::frl_gate(
+            driver_name.as_deref(),
+            sys.kernel.as_deref().and_then(link::kernel_version),
+            &params,
+        );
         let mut sink_key = None;
         if lay(LayerKind::SinkChain) {
             let mut layer = LayerCapabilities {
@@ -664,6 +727,26 @@ pub(crate) fn endpoints(
                     };
                 }
                 _ => {}
+            }
+            if let Some(s) = &mut ep.sink {
+                // Only with the KMS state: without it an MST hub can't be seen, and a partial list
+                // would look complete.
+                let devices = link::chain(
+                    &ctype_for_chain,
+                    subconnector.as_deref(),
+                    sink_full.as_ref(),
+                    mst,
+                );
+                if km.is_some() && !devices.is_empty() {
+                    s.chain = Value::inferred(
+                        devices,
+                        prov(
+                            LayerKind::SinkChain,
+                            Source::derived("connector type, sink EDID and MST path"),
+                            now,
+                        ),
+                    );
+                }
             }
             if let Some(s) = &ep.sink {
                 sink_key = s.identity.sink_key.known().cloned();
@@ -754,7 +837,7 @@ pub(crate) fn endpoints(
                             now,
                         ),
                     ),
-                    features: vec![],
+                    features: link::frl_feature(&frl, now).into_iter().collect(),
                 })
             });
             ep.layers.push(LayerCapabilities {
@@ -824,6 +907,36 @@ pub(crate) fn endpoints(
             };
             ep.layers.push(layer);
         }
+        if lay(LayerKind::Link) {
+            let kms_full = km.map(|(card, conn)| kms::kms_state(card, conn, &Selection::All, now));
+            let layer = match (kms, &kms_full) {
+                (_, Some(k)) => link::link_layer(&link::Inputs {
+                    connector: &ctype_for_chain,
+                    subconnector: subconnector.as_deref(),
+                    sink: sink_full.as_ref(),
+                    kms: Some(k),
+                    mst,
+                    driver: driver_name.as_deref(),
+                    frl: frl.clone(),
+                    source: None,
+                    with_detail: field(FieldGroup::Link),
+                    now,
+                }),
+                (other, None) => LayerCapabilities {
+                    layer: LayerKind::Link,
+                    availability: match kms_availability(other) {
+                        Availability::Read | Availability::Partial => Availability::Unknown {
+                            reason: UnknownReason::NotExposed,
+                            detail: Some("no KMS state for this connector".into()),
+                        },
+                        a => a,
+                    },
+                    caps: CapabilitySet::default(),
+                    detail: None,
+                },
+            };
+            ep.layers.push(layer);
+        }
         if field(FieldGroup::Identity) {
             let measured = |id| CorrelationKey {
                 id,
@@ -868,6 +981,10 @@ pub(crate) fn endpoints(
     }
     if lay(LayerKind::Kms) {
         avail.insert(LayerKind::Kms, kms_availability(kms));
+    }
+    if lay(LayerKind::Link) {
+        // Inferred from KMS: as readable as KMS is.
+        avail.insert(LayerKind::Link, kms_availability(kms));
     }
     (out, avail)
 }

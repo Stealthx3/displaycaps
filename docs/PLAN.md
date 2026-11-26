@@ -43,9 +43,9 @@ Open items (not phase tasks):
 
 ## Phase 4 — Link budget engine (about 2 weeks)
 
-- [ ] **4.1** TMDS, FRL, DP and DSC budget maths with table-driven tests
-- [ ] **4.2** Inferred link state: chroma, bit depth, headroom, adapters and docks
-- [ ] **4.3** Gate: HTPC 4K fallbacks explained, with FRL off and on
+- [x] **4.1** TMDS, FRL, DP and DSC budget maths with table-driven tests
+- [x] **4.2** Inferred link state: chroma, bit depth, headroom, adapters and docks
+- [x] **4.3** Gate: HTPC 4K fallbacks explained, with FRL off and on (simulated: the HTPC TV's EDID, plus an FRL variant, on amdgpu)
 
 ## Phase 5 — Compositors and X11 (about 4 weeks)
 
