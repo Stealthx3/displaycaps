@@ -5,8 +5,9 @@
 //!   `force_probe = false`, the same request as libdrm's `drmModeGetConnectorCurrent`): the
 //!   kernel returns its cached state and never probes the connector.
 //! - Nothing is set: no mode, no property, no master. The only per-file change is the client
-//!   capabilities (universal planes, atomic), which make atomic-only properties visible to this
-//!   file descriptor and affect nothing else.
+//!   capabilities (universal planes, atomic, aspect ratio), which make atomic-only properties and
+//!   the modes' picture aspect ratio visible to this file descriptor and affect nothing else.
+//!   Stereo 3D and writeback connectors are left off: neither is a display the library reports.
 //! - The primary node is opened only inside a display session, where the compositor is DRM master
 //!   already. Outside one the kernel would make this process master implicitly, so the caller
 //!   doesn't open it at all (see `drm::kms_readable`).
@@ -42,6 +43,7 @@ pub(crate) fn read_card(name: &str, blobs: &[&str]) -> io::Result<KmsCard> {
     // Visibility only; failures leave the legacy property set, which is still read.
     let _ = card.set_client_capability(ClientCapability::UniversalPlanes, true);
     let _ = card.set_client_capability(ClientCapability::Atomic, true);
+    let _ = card.set_client_capability(ClientCapability::AspectRatio, true);
     let driver = card
         .get_driver()
         .map(|d| d.name().to_string_lossy().into_owned())
@@ -85,22 +87,22 @@ pub(crate) fn read_card(name: &str, blobs: &[&str]) -> io::Result<KmsCard> {
 }
 
 fn mode(m: &drm::control::Mode) -> KmsMode {
-    let (hdisplay, vdisplay) = m.size();
-    let (hsync_start, hsync_end, htotal) = m.hsync();
-    let (vsync_start, vsync_end, vtotal) = m.vsync();
+    // The raw struct: the `drm` crate's flag types drop bits they don't name (picture aspect
+    // ratio among them).
+    let r = drm_ffi::drm_mode_modeinfo::from(*m);
     KmsMode {
-        clock_khz: m.clock(),
-        hdisplay,
-        hsync_start,
-        hsync_end,
-        htotal,
-        vdisplay,
-        vsync_start,
-        vsync_end,
-        vtotal,
-        vscan: m.vscan(),
-        flags: m.flags().bits(),
-        mode_type: m.mode_type().bits(),
+        clock_khz: r.clock,
+        hdisplay: r.hdisplay,
+        hsync_start: r.hsync_start,
+        hsync_end: r.hsync_end,
+        htotal: r.htotal,
+        vdisplay: r.vdisplay,
+        vsync_start: r.vsync_start,
+        vsync_end: r.vsync_end,
+        vtotal: r.vtotal,
+        vscan: r.vscan,
+        flags: r.flags,
+        mode_type: r.type_,
     }
 }
 

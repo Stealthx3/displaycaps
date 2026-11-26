@@ -116,6 +116,7 @@ dependencies = [
  "displaycaps-parse",
  "displaycaps-rules",
  "drm",
+ "drm-ffi",
  "expect-test",
  "nix",
  "serde",

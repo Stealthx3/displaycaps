@@ -25,6 +25,33 @@ pub mod sink;
 pub mod watch;
 
 pub use drm::kms_facts;
+
+/// Entry points for the fuzz targets (`fuzz/`): the backends' parsers of untrusted bytes. Not
+/// part of the API.
+#[doc(hidden)]
+pub mod fuzzing {
+    /// `drm_info -j` output (fixtures).
+    pub fn drm_info(data: &[u8]) {
+        if let Ok(cards) = crate::drm::kms::from_drm_info(data) {
+            for c in &cards {
+                for k in &c.connectors {
+                    let _ = crate::drm::kms::kms_state(c, k, &displaycaps_model::Selection::All, 0);
+                    let _ = crate::drm::kms::modes(k);
+                }
+            }
+        }
+    }
+
+    /// A kernel uevent message.
+    pub fn uevent(data: &[u8]) {
+        let _ = crate::drm::uevent::parse(data);
+    }
+
+    /// An `HDR_OUTPUT_METADATA` blob.
+    pub fn hdr_metadata(data: &[u8]) {
+        let _ = crate::drm::kms::decode_hdr_metadata(data);
+    }
+}
 pub use probe::{probe, probe_with};
 pub use root::SystemRoot;
 pub use runtime::{Backend, ProbeOptions, Runtime};

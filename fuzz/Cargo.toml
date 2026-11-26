@@ -17,6 +17,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 displaycaps-parse = { path = "../crates/displaycaps-parse" }
 displaycaps-rules = { path = "../crates/displaycaps-rules" }
+displaycaps-backends = { path = "../crates/displaycaps-backends" }
 serde_json = "1"
 
 [workspace]
@@ -63,6 +64,27 @@ bench = false
 [[bin]]
 name = "timing"
 path = "fuzz_targets/timing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "drm_info"
+path = "fuzz_targets/drm_info.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "uevent"
+path = "fuzz_targets/uevent.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hdr_metadata"
+path = "fuzz_targets/hdr_metadata.rs"
 test = false
 doc = false
 bench = false
