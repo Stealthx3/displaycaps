@@ -66,8 +66,8 @@
       "layer": "compositor",
       "availability": {
         "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "reason": "not_exposed",
+        "detail": "the capture has no compositor facts"
       }
     },
     {
@@ -279,6 +279,15 @@
             "state": "unknown",
             "reason": "not_exposed",
             "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
+        },
+        {
+          "layer": "compositor",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no compositor facts"
           },
           "caps": {}
         }
@@ -1805,6 +1814,15 @@
             "detail": "the capture has no drm_info output (taken outside a display session)"
           },
           "caps": {}
+        },
+        {
+          "layer": "compositor",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no compositor facts"
+          },
+          "caps": {}
         }
       ]
     },
@@ -2863,6 +2881,15 @@
             "detail": "the capture has no drm_info output (taken outside a display session)"
           },
           "caps": {}
+        },
+        {
+          "layer": "compositor",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no compositor facts"
+          },
+          "caps": {}
         }
       ]
     },
@@ -3007,6 +3034,15 @@
             "state": "unknown",
             "reason": "not_exposed",
             "detail": "the capture has no drm_info output (taken outside a display session)"
+          },
+          "caps": {}
+        },
+        {
+          "layer": "compositor",
+          "availability": {
+            "state": "unknown",
+            "reason": "not_exposed",
+            "detail": "the capture has no compositor facts"
           },
           "caps": {}
         }

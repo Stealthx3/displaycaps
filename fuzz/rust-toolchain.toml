@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # cargo-fuzz needs nightly (sanitizer flags). Installed in the lab VM only.
-# Copied from AudioCaps v1.0.0 (commit 049d053) fuzz/rust-toolchain.toml.
+# Adapted from AudioCaps v1.0.0 (commit 049d053) fuzz/rust-toolchain.toml: a later nightly, since
+# nightly-2026-11-01 fails on zbus_utils (E0391, "needs async drop" cycle) that the compositor
+# backend pulls in; nightly-2026-11-25 builds it.
 [toolchain]
-channel = "nightly-2026-11-01"
+channel = "nightly-2026-11-25"
 profile = "minimal"

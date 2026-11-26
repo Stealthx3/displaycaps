@@ -132,7 +132,7 @@ fn plug(name: &str) -> (Vec<LayerKind>, bool) {
 }
 
 /// The unix socket path of the Wayland display, when it can be worked out.
-fn wayland_socket(env: &Env) -> Option<String> {
+pub(crate) fn wayland_socket(env: &Env) -> Option<String> {
     let display = env.get("WAYLAND_DISPLAY")?;
     if display.starts_with('/') {
         return Some(display);

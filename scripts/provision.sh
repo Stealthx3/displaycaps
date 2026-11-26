@@ -8,7 +8,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update -qq
 sudo apt-get install -y -qq build-essential pkg-config clang libclang-dev git curl strace \
-  libdrm-dev libwayland-dev libdbus-1-dev >/dev/null
+  libdrm-dev libwayland-dev libdbus-1-dev libxcb1-dev libxcb-randr0-dev >/dev/null
 if ! command -v rustup >/dev/null && [ ! -x "$HOME/.cargo/bin/rustup" ]; then
   curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
 fi

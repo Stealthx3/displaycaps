@@ -15,7 +15,8 @@
 //! `/sys/class/drm` (status, modes, enabled, dpms, EDID with the serial zeroed) and the GPU's PCI
 //! ids and driver link; the display driver's module parameters (e.g. amdgpu's feature masks);
 //! `drm_info -j`; the compositor's output state (`wayland-info`, `kscreen-doctor -j`,
-//! `wlr-randr --json`, Mutter's `GetCurrentState`, `xrandr --current --verbose`); and `vainfo` and
+//! `wlr-randr --json`, Mutter's `GetCurrentState`, `xrandr --current --verbose`, and this
+//! library's own compositor facts, `displaycaps-compositor.json`); and `vainfo` and
 //! `vulkaninfo --summary`. A tool that isn't installed is recorded as skipped.
 
 use std::collections::BTreeSet;
@@ -345,6 +346,36 @@ pub fn capture(opts: &Options) -> io::Result<PathBuf> {
         let rec = run_command(&mut st, name, argv, &[]);
         commands.push(rec);
     }
+    // This library's own compositor reader, in-process, with serials and EDIDs redacted: the
+    // facts fixtures replay.
+    let name = displaycaps_backends::compositor::CAPTURED;
+    let mut rec = CapturedCommand {
+        name: name.to_string(),
+        argv: vec!["(in-process)".into()],
+        exit_code: None,
+        output_file: None,
+        skipped: None,
+    };
+    if session {
+        match displaycaps_backends::compositor::live_facts(CMD_TIMEOUT) {
+            Ok(f) => {
+                let file = format!("{name}.json");
+                let mut text = serde_json::to_string_pretty(&f).map_err(io::Error::other)?;
+                text.push('\n');
+                if fs::write(st.dir.join("commands").join(&file), st.redactor.text(&text)).is_ok() {
+                    rec.exit_code = Some(0);
+                    rec.output_file = Some(file);
+                }
+            }
+            Err(e) => {
+                rec.exit_code = Some(1);
+                rec.skipped = Some(e);
+            }
+        }
+    } else {
+        rec.skipped = Some("no display session".into());
+    }
+    commands.push(rec);
 
     let manifest = Manifest {
         format: CAPTURE_FORMAT,

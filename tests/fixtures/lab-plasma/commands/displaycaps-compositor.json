@@ -1,0 +1,481 @@
+{
+  "wayland": {
+    "ok": {
+      "globals": [
+        {
+          "interface": "wl_compositor",
+          "version": 6
+        },
+        {
+          "interface": "zwp_tablet_manager_v2",
+          "version": 1
+        },
+        {
+          "interface": "zwp_keyboard_shortcuts_inhibit_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "zxdg_decoration_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_viewporter",
+          "version": 1
+        },
+        {
+          "interface": "wp_security_context_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_fractional_scale_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "wl_shm",
+          "version": 1
+        },
+        {
+          "interface": "wl_seat",
+          "version": 9
+        },
+        {
+          "interface": "zwp_pointer_gestures_v1",
+          "version": 3
+        },
+        {
+          "interface": "zwp_pointer_constraints_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_relative_pointer_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "wl_data_device_manager",
+          "version": 3
+        },
+        {
+          "interface": "zwlr_data_control_manager_v1",
+          "version": 2
+        },
+        {
+          "interface": "wp_cursor_shape_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_primary_selection_device_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "org_kde_kwin_idle",
+          "version": 1
+        },
+        {
+          "interface": "zwp_idle_inhibit_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "ext_idle_notifier_v1",
+          "version": 1
+        },
+        {
+          "interface": "org_kde_plasma_shell",
+          "version": 8
+        },
+        {
+          "interface": "org_kde_kwin_appmenu_manager",
+          "version": 2
+        },
+        {
+          "interface": "org_kde_kwin_server_decoration_palette_manager",
+          "version": 1
+        },
+        {
+          "interface": "org_kde_plasma_virtual_desktop_management",
+          "version": 2
+        },
+        {
+          "interface": "org_kde_kwin_shadow_manager",
+          "version": 2
+        },
+        {
+          "interface": "org_kde_kwin_dpms_manager",
+          "version": 1
+        },
+        {
+          "interface": "org_kde_kwin_server_decoration_manager",
+          "version": 1
+        },
+        {
+          "interface": "kde_output_management_v2",
+          "version": 12
+        },
+        {
+          "interface": "zxdg_output_manager_v1",
+          "version": 3
+        },
+        {
+          "interface": "wl_subcompositor",
+          "version": 1
+        },
+        {
+          "interface": "zxdg_exporter_v2",
+          "version": 1
+        },
+        {
+          "interface": "zxdg_importer_v2",
+          "version": 1
+        },
+        {
+          "interface": "xdg_activation_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_content_type_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_tearing_control_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "xdg_toplevel_drag_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "xdg_toplevel_icon_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "kde_screen_edge_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "frog_color_management_factory_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_presentation",
+          "version": 2
+        },
+        {
+          "interface": "wp_color_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "xdg_wm_dialog_v1",
+          "version": 1
+        },
+        {
+          "interface": "kde_external_brightness_v1",
+          "version": 2
+        },
+        {
+          "interface": "wp_alpha_modifier_v1",
+          "version": 1
+        },
+        {
+          "interface": "wl_drm",
+          "version": 2
+        },
+        {
+          "interface": "zwp_linux_dmabuf_v1",
+          "version": 4
+        },
+        {
+          "interface": "wp_linux_drm_syncobj_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "xdg_wm_base",
+          "version": 6
+        },
+        {
+          "interface": "zwlr_layer_shell_v1",
+          "version": 5
+        },
+        {
+          "interface": "kde_output_device_v2",
+          "version": 11
+        },
+        {
+          "interface": "wl_output",
+          "version": 4
+        },
+        {
+          "interface": "wp_drm_lease_device_v1",
+          "version": 1
+        },
+        {
+          "interface": "kde_output_order_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_text_input_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_text_input_manager_v2",
+          "version": 1
+        },
+        {
+          "interface": "zwp_text_input_manager_v3",
+          "version": 1
+        },
+        {
+          "interface": "xdg_system_bell_v1",
+          "version": 1
+        }
+      ],
+      "outputs": [
+        {
+          "version": 4,
+          "name": "Virtual-1",
+          "description": "Red Hat, Inc. Virtual-1-QEMU Monitor",
+          "make": "Red Hat, Inc.",
+          "model": "Virtual-1-QEMU Monitor",
+          "mode": {
+            "width": 1280,
+            "height": 800,
+            "refresh_mhz": 74994
+          },
+          "scale": 1,
+          "image_description": {
+            "ok": {
+              "primaries_named": "srgb",
+              "primaries": [
+                640000,
+                330000,
+                300000,
+                600000,
+                150000,
+                60000,
+                312700,
+                329000
+              ],
+              "tf_named": "gamma22",
+              "luminances": [
+                100,
+                200,
+                200
+              ],
+              "target_primaries": [
+                640000,
+                330000,
+                300000,
+                600000,
+                150000,
+                60000,
+                312700,
+                329000
+              ],
+              "target_luminance": [
+                100,
+                200
+              ],
+              "target_max_cll": 200,
+              "target_max_fall": 200
+            }
+          }
+        }
+      ],
+      "color_manager": {
+        "version": 1,
+        "features": [
+          "parametric",
+          "extended_target_volume",
+          "set_mastering_display_primaries",
+          "set_primaries",
+          "set_luminances",
+          "windows_scrgb"
+        ],
+        "transfer_functions": [
+          "gamma22",
+          "srgb",
+          "st2084_pq",
+          "ext_linear"
+        ],
+        "primaries": [
+          "srgb",
+          "pal_m",
+          "pal",
+          "ntsc",
+          "generic_film",
+          "bt2020",
+          "cie1931_xyz",
+          "dci_p3",
+          "display_p3",
+          "adobe_rgb"
+        ],
+        "intents": [
+          "perceptual",
+          "relative",
+          "absolute",
+          "relative_bpc"
+        ]
+      },
+      "kde_devices": [
+        {
+          "version": 11,
+          "name": "Virtual-1",
+          "make": "Red Hat, Inc.",
+          "model": "Virtual-1-QEMU Monitor",
+          "edid_hex": "00ffffffffffff0049143412000000002a180104a520147806ee91a3544c99260f5054210800e1c0d1c0d100a940b300950081808140ea2900c051201c304026444045cb10000018000000f7000a004082002820000000000000000000fd00327d1ea0ff010a202020202020000000fc0051454d55204d6f6e69746f720a013a02030b00467d6560591f6100000010000000000000000000000000000000000010000000000000000000000000000000000010000000000000000000000000000000000010000000000000000000000000000000000010000000000000000000000000000000000010000000000000000000000000000000000000000000002f",
+          "enabled": true,
+          "modes": [
+            {
+              "width": 1280,
+              "height": 800,
+              "refresh_mhz": 74994,
+              "preferred": true
+            },
+            {
+              "width": 5120,
+              "height": 2160,
+              "refresh_mhz": 50000
+            },
+            {
+              "width": 4096,
+              "height": 2160,
+              "refresh_mhz": 50000
+            },
+            {
+              "width": 3840,
+              "height": 2160,
+              "refresh_mhz": 60000
+            },
+            {
+              "width": 3840,
+              "height": 2160,
+              "refresh_mhz": 59940
+            },
+            {
+              "width": 3840,
+              "height": 2160,
+              "refresh_mhz": 50000
+            },
+            {
+              "width": 1920,
+              "height": 1440,
+              "refresh_mhz": 60000
+            },
+            {
+              "width": 2560,
+              "height": 1080,
+              "refresh_mhz": 50000
+            },
+            {
+              "width": 1856,
+              "height": 1392,
+              "refresh_mhz": 59995
+            },
+            {
+              "width": 1792,
+              "height": 1344,
+              "refresh_mhz": 60000
+            },
+            {
+              "width": 2048,
+              "height": 1152,
+              "refresh_mhz": 60000
+            },
+            {
+              "width": 1920,
+              "height": 1200,
+              "refresh_mhz": 59885
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "refresh_mhz": 60000
+            },
+            {
+              "width": 1920,
+              "height": 1080,
+              "refresh_mhz": 50000
+            },
+            {
+              "width": 1600,
+              "height": 1200,
+              "refresh_mhz": 60000
+            },
+            {
+              "width": 1680,
+              "height": 1050,
+              "refresh_mhz": 59954
+            },
+            {
+              "width": 1400,
+              "height": 1050,
+              "refresh_mhz": 59978
+            },
+            {
+              "width": 1280,
+              "height": 1024,
+              "refresh_mhz": 60020
+            },
+            {
+              "width": 1440,
+              "height": 900,
+              "refresh_mhz": 59887
+            },
+            {
+              "width": 1280,
+              "height": 960,
+              "refresh_mhz": 60000
+            },
+            {
+              "width": 1360,
+              "height": 768,
+              "refresh_mhz": 60015
+            },
+            {
+              "width": 1280,
+              "height": 768,
+              "refresh_mhz": 59870
+            },
+            {
+              "width": 1024,
+              "height": 768,
+              "refresh_mhz": 60004
+            },
+            {
+              "width": 800,
+              "height": 600,
+              "refresh_mhz": 60317
+            },
+            {
+              "width": 640,
+              "height": 480,
+              "refresh_mhz": 60000
+            },
+            {
+              "width": 640,
+              "height": 480,
+              "refresh_mhz": 59940
+            }
+          ],
+          "current_mode": 0,
+          "scale": 1.0,
+          "capabilities": 192,
+          "vrr_policy": 0,
+          "rgb_range": 0,
+          "hdr": false,
+          "wide_color": false,
+          "sdr_brightness": 200,
+          "brightness_metadata": [
+            0,
+            0,
+            0
+          ],
+          "brightness_overrides": [
+            -1,
+            -1,
+            -1
+          ],
+          "color_profile_source": 0
+        }
+      ]
+    }
+  }
+}

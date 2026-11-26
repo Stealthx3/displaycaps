@@ -21,6 +21,7 @@ sudo apt-get install -y -qq --no-install-recommends \
   gdm3 gnome-session gnome-shell \
   plasma-workspace kwin-wayland libkscreen-bin kscreen \
   sway foot \
+  xserver-xorg-core xserver-xorg-input-libinput kwin-x11 xauth xtrace dbus-bin \
   wayland-utils wlr-randr drm-info libdrm-tests x11-xserver-utils libglib2.0-bin \
   vainfo vulkan-tools mesa-va-drivers mesa-vulkan-drivers \
   strace python3 dbus-user-session >/dev/null

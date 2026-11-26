@@ -50,7 +50,9 @@ pub(crate) fn link_in_scope(scope: &ProbeScope) -> bool {
 
 /// Whether the scope needs the DRM backends at all.
 pub(crate) fn in_scope(scope: &ProbeScope) -> bool {
+    // The compositor layer is attached to the DRM connectors, so it needs their list.
     ENDPOINT_LAYERS.iter().any(|l| scope.layers.includes(l))
+        || scope.layers.includes(&LayerKind::Compositor)
 }
 
 /// The sysfs tree: cards and connectors, or why `/sys/class/drm` couldn't be listed.

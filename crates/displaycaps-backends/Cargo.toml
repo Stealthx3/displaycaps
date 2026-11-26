@@ -21,6 +21,13 @@ serde_json.workspace = true
 drm.workspace = true
 drm-ffi.workspace = true
 nix.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true
+wayland-protocols-wlr.workspace = true
+wayland-protocols-plasma.workspace = true
+zbus.workspace = true
+zruntime.workspace = true
+xcb.workspace = true
 
 [lints]
 workspace = true

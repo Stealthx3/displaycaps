@@ -1,0 +1,318 @@
+{
+  "features": 11,
+  "outputs": [
+    {
+      "clones": [],
+      "connected": true,
+      "currentModeId": "67",
+      "enabled": true,
+      "followPreferredMode": false,
+      "icon": "",
+      "id": 64,
+      "modes": [
+        {
+          "id": "67",
+          "name": "",
+          "refreshRate": 74.99385070800781,
+          "size": {
+            "height": 800,
+            "width": 1280
+          }
+        },
+        {
+          "id": "68",
+          "name": "",
+          "refreshRate": 49.999996185302734,
+          "size": {
+            "height": 2160,
+            "width": 5120
+          }
+        },
+        {
+          "id": "69",
+          "name": "",
+          "refreshRate": 50,
+          "size": {
+            "height": 2160,
+            "width": 4096
+          }
+        },
+        {
+          "id": "70",
+          "name": "",
+          "refreshRate": 60,
+          "size": {
+            "height": 2160,
+            "width": 3840
+          }
+        },
+        {
+          "id": "71",
+          "name": "",
+          "refreshRate": 50,
+          "size": {
+            "height": 2160,
+            "width": 3840
+          }
+        },
+        {
+          "id": "72",
+          "name": "",
+          "refreshRate": 59.94009780883789,
+          "size": {
+            "height": 2160,
+            "width": 3840
+          }
+        },
+        {
+          "id": "73",
+          "name": "",
+          "refreshRate": 60,
+          "size": {
+            "height": 1440,
+            "width": 1920
+          }
+        },
+        {
+          "id": "74",
+          "name": "",
+          "refreshRate": 49.999996185302734,
+          "size": {
+            "height": 1080,
+            "width": 2560
+          }
+        },
+        {
+          "id": "75",
+          "name": "",
+          "refreshRate": 59.99518203735352,
+          "size": {
+            "height": 1392,
+            "width": 1856
+          }
+        },
+        {
+          "id": "76",
+          "name": "",
+          "refreshRate": 59.99979019165039,
+          "size": {
+            "height": 1344,
+            "width": 1792
+          }
+        },
+        {
+          "id": "77",
+          "name": "",
+          "refreshRate": 60,
+          "size": {
+            "height": 1152,
+            "width": 2048
+          }
+        },
+        {
+          "id": "78",
+          "name": "",
+          "refreshRate": 59.88460159301758,
+          "size": {
+            "height": 1200,
+            "width": 1920
+          }
+        },
+        {
+          "id": "79",
+          "name": "",
+          "refreshRate": 60,
+          "size": {
+            "height": 1080,
+            "width": 1920
+          }
+        },
+        {
+          "id": "80",
+          "name": "",
+          "refreshRate": 50,
+          "size": {
+            "height": 1080,
+            "width": 1920
+          }
+        },
+        {
+          "id": "81",
+          "name": "",
+          "refreshRate": 60,
+          "size": {
+            "height": 1200,
+            "width": 1600
+          }
+        },
+        {
+          "id": "82",
+          "name": "",
+          "refreshRate": 59.95425033569336,
+          "size": {
+            "height": 1050,
+            "width": 1680
+          }
+        },
+        {
+          "id": "83",
+          "name": "",
+          "refreshRate": 59.97844314575195,
+          "size": {
+            "height": 1050,
+            "width": 1400
+          }
+        },
+        {
+          "id": "84",
+          "name": "",
+          "refreshRate": 60.01974105834961,
+          "size": {
+            "height": 1024,
+            "width": 1280
+          }
+        },
+        {
+          "id": "85",
+          "name": "",
+          "refreshRate": 59.88744354248047,
+          "size": {
+            "height": 900,
+            "width": 1440
+          }
+        },
+        {
+          "id": "86",
+          "name": "",
+          "refreshRate": 60,
+          "size": {
+            "height": 960,
+            "width": 1280
+          }
+        },
+        {
+          "id": "87",
+          "name": "",
+          "refreshRate": 60.01516342163086,
+          "size": {
+            "height": 768,
+            "width": 1360
+          }
+        },
+        {
+          "id": "88",
+          "name": "",
+          "refreshRate": 59.8702278137207,
+          "size": {
+            "height": 768,
+            "width": 1280
+          }
+        },
+        {
+          "id": "89",
+          "name": "",
+          "refreshRate": 60.00384140014648,
+          "size": {
+            "height": 768,
+            "width": 1024
+          }
+        },
+        {
+          "id": "90",
+          "name": "",
+          "refreshRate": 60.3165397644043,
+          "size": {
+            "height": 600,
+            "width": 800
+          }
+        },
+        {
+          "id": "91",
+          "name": "",
+          "refreshRate": 60,
+          "size": {
+            "height": 480,
+            "width": 640
+          }
+        },
+        {
+          "id": "92",
+          "name": "",
+          "refreshRate": 59.94047546386719,
+          "size": {
+            "height": 480,
+            "width": 640
+          }
+        }
+      ],
+      "name": "Virtual-1",
+      "pos": {
+        "x": 0,
+        "y": 0
+      },
+      "preferredModes": [
+        "67"
+      ],
+      "priority": 1,
+      "replicationSource": 0,
+      "rotation": 1,
+      "scale": 1,
+      "size": {
+        "height": 800,
+        "width": 1280
+      },
+      "sizeMM": {
+        "height": 203,
+        "width": 325
+      },
+      "type": 0
+    },
+    {
+      "clones": [],
+      "connected": false,
+      "currentModeId": "",
+      "enabled": false,
+      "followPreferredMode": false,
+      "icon": "",
+      "id": 65,
+      "modes": [],
+      "name": "Virtual-2",
+      "pos": {
+        "x": 0,
+        "y": 0
+      },
+      "preferredModes": [],
+      "priority": 0,
+      "replicationSource": 0,
+      "rotation": 1,
+      "scale": 1,
+      "size": {
+        "height": -1,
+        "width": -1
+      },
+      "sizeMM": {
+        "height": 0,
+        "width": 0
+      },
+      "type": 0
+    }
+  ],
+  "screen": {
+    "currentSize": {
+      "height": 800,
+      "width": 1280
+    },
+    "id": 0,
+    "maxActiveOutputsCount": 2,
+    "maxSize": {
+      "height": 8192,
+      "width": 8192
+    },
+    "minSize": {
+      "height": 200,
+      "width": 320
+    }
+  },
+  "tabletModeAvailable": false,
+  "tabletModeEngaged": false
+}

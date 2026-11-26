@@ -41,7 +41,7 @@ USAGE:
       Print the JSON schema of the snapshot (v1).
   displaycaps watch [--layer NAME]... [--events N] [--seconds S] [--kms-poll MS]
       Watch the live system (default: every layer) and print one JSON line per change: its
-      causes (hotplug, kms_change, ...), the re-probe latency and the diff. Stops after N events
+      causes (Hotplug, KmsChange, CompositorChange, ...), the re-probe latency and the diff. Stops after N events
       (default 1) or S seconds (default 60). --kms-poll turns on the KMS change poll.
   displaycaps link <edid-file> --mode WxH@HZ [--connector hdmi|dp] [--subconnector NAME]
                    [--driver NAME] [--kernel X.Y] [--param MODULE.NAME=VALUE]...
@@ -55,6 +55,10 @@ USAGE:
   displaycaps kms-facts [--drm-info FILE]
       Print KMS state as normalized fact lines, read with this library's read-only ioctls (only
       inside a display session), or from a `drm_info -j` file. Lab tooling for the KMS gate.
+  displaycaps compositor-facts
+      Print what the session's compositor reports (Wayland registry and output protocols,
+      Mutter's DisplayConfig, X11 RandR) as JSON, serials redacted. Read-only. Lab tooling for
+      the compositor gate; captures save the same facts.
   displaycaps sink <edid-file> [--keep-serial]
       Decode an EDID file into the sink record (JSON) with the bundled quirk data. The serial is
       redacted unless --keep-serial is given.
@@ -70,6 +74,7 @@ fn main() -> ExitCode {
             .map_err(|e| e.to_string())
             .map(|n| println!("{n} files re-redacted")),
         Some("kms-facts") => cmd_kms_facts(&args[1..]),
+        Some("compositor-facts") if args.len() == 1 => cmd_compositor_facts(),
         Some("watch") => cmd_watch(&args[1..]),
         Some("link") => cmd_link(&args[1..]),
         Some("replay") if args.len() == 2 => SystemRoot::fixture(&args[1])
@@ -244,6 +249,15 @@ fn cmd_kms_facts(args: &[String]) -> Result<(), String> {
     for line in displaycaps_backends::kms_facts(json.as_deref())? {
         println!("{line}");
     }
+    Ok(())
+}
+
+fn cmd_compositor_facts() -> Result<(), String> {
+    let f = displaycaps_backends::compositor::live_facts(std::time::Duration::from_secs(5))?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&f).map_err(|e| e.to_string())?
+    );
     Ok(())
 }
 
