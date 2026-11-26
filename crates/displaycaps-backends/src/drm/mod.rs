@@ -13,7 +13,7 @@
 
 pub(crate) mod kms;
 mod kms_live;
-pub(crate) mod link;
+pub mod link;
 pub(crate) mod sysfs;
 pub(crate) mod uevent;
 
@@ -22,8 +22,8 @@ use std::collections::BTreeMap;
 use displaycaps_model::{
     Availability, CapabilitySet, Confidence, ConnectionStatus, CorrelationId, CorrelationKey,
     DriverDetail, Endpoint, EndpointId, FieldGroup, Gpu, HostDetail, LayerCapabilities,
-    LayerDetail, LayerKind, ModuleParameter, ProbeScope, Provenance, SessionKind, Source,
-    Selection, UnknownReason, Value,
+    LayerDetail, LayerKind, ModuleParameter, ProbeScope, Provenance, Selection, SessionKind,
+    Source, UnknownReason, Value,
 };
 use displaycaps_rules::quirks::QuirkSet;
 
@@ -199,8 +199,8 @@ pub(crate) fn kms_plan(
 ) -> Result<(Vec<CardPlan>, Vec<CardResult>), (UnknownReason, String)> {
     let (cards, conns) =
         sysfs::scan(root).map_err(|e| (io_reason(&e), format!("{}: {e}", sysfs::CLASS)))?;
-    let sink = scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope)
-        || link_in_scope(scope);
+    let sink =
+        scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope) || link_in_scope(scope);
     let mut plans = vec![];
     let mut skipped = vec![];
     for card in &cards {

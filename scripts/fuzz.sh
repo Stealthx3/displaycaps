@@ -10,7 +10,7 @@
 set -uo pipefail
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 cd "$(dirname "$0")/.."
-TARGETS=(edid cta_video displayid timing os_release rule_pack drm_info uevent hdr_metadata)
+TARGETS=(edid cta_video displayid timing os_release rule_pack drm_info uevent hdr_metadata link)
 F=fuzz
 
 seed_files() { # target dir pattern...
@@ -51,7 +51,9 @@ case "${1:-}" in
     find tests/fixtures -name os-release -size +0 | while read -r p; do cp "$p" "$F/corpus/os_release/seed-$(sha256sum "$p" | cut -c1-16)"; done
     mkdir -p "$F/corpus/rule_pack"; for p in crates/displaycaps-rules/packs/*.json; do cp "$p" "$F/corpus/rule_pack/seed-$(basename "$p")"; done
     seed_files drm_info -name drm_info.json
-    mkdir -p "$F/corpus/uevent" "$F/corpus/hdr_metadata"
+    mkdir -p "$F/corpus/uevent" "$F/corpus/hdr_metadata" "$F/corpus/link"
+    # A 4K120 CTA timing on HDMI with FRL 4×12 at both ends, RGB/4:2:0 at 8-12 bits.
+    printf '\x00\x0f\x70\x08\x60\x20\x12\x00\x30\x11\xca\x08\x05\x00\x00\x43\xc0\x27\x09\x00\x1c\x09\x03\x0a' >"$F/corpus/link/seed-4k120"
     printf 'change@/devices/pci0000:00/0000:00:01.0/drm/card0\0ACTION=change\0SUBSYSTEM=drm\0HOTPLUG=1\0CONNECTOR=37\0' >"$F/corpus/uevent/seed-hotplug"
     printf 'add@/devices/pci0000:00/0000:00:01.0/drm/card1\0ACTION=add\0SUBSYSTEM=drm\0DEVNAME=dri/card1\0' >"$F/corpus/uevent/seed-add"
     # A PQ static-metadata blob (type 0, EOTF 2, 1000/0.005 nits, MaxCLL 800, MaxFALL 400).

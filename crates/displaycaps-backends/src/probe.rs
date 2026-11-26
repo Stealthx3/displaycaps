@@ -363,10 +363,7 @@ mod tests {
                         reason: UnknownReason::NotImplemented,
                         ..
                     },
-                ) if matches!(
-                    l,
-                    LayerKind::Compositor | LayerKind::Decode
-                ) => {}
+                ) if matches!(l, LayerKind::Compositor | LayerKind::Decode) => {}
                 (l, a) => panic!("{l:?}: {a:?}"),
             }
         }
@@ -411,11 +408,18 @@ mod tests {
             ]
         );
         // A virtual output: the link is virtual, worked out from the KMS mode.
-        let link = e.layers.iter().find(|l| l.layer == LayerKind::Link).unwrap();
+        let link = e
+            .layers
+            .iter()
+            .find(|l| l.layer == LayerKind::Link)
+            .unwrap();
         let Some(displaycaps_model::LayerDetail::Link(ls)) = &link.detail else {
             panic!("link detail")
         };
-        assert_eq!(ls.signal.known(), Some(&displaycaps_model::LinkSignal::Virtual));
+        assert_eq!(
+            ls.signal.known(),
+            Some(&displaycaps_model::LinkSignal::Virtual)
+        );
         assert_eq!(ls.bit_depth.known(), Some(&8));
         let kms = e.layers.iter().find(|l| l.layer == LayerKind::Kms).unwrap();
         assert_eq!(kms.availability, Availability::Read);

@@ -18,6 +18,8 @@ libfuzzer-sys = "0.4"
 displaycaps-parse = { path = "../crates/displaycaps-parse" }
 displaycaps-rules = { path = "../crates/displaycaps-rules" }
 displaycaps-backends = { path = "../crates/displaycaps-backends" }
+displaycaps-link = { path = "../crates/displaycaps-link" }
+displaycaps-model = { path = "../crates/displaycaps-model" }
 serde_json = "1"
 
 [workspace]
@@ -85,6 +87,13 @@ bench = false
 [[bin]]
 name = "hdr_metadata"
 path = "fuzz_targets/hdr_metadata.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "link"
+path = "fuzz_targets/link.rs"
 test = false
 doc = false
 bench = false
