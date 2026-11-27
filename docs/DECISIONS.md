@@ -68,3 +68,4 @@ Open items live in `docs/PLAN.md`.
 - **2026-11-26** · change · XWayland outputs (an app with only the X11 socket on a Wayland host) report HDR as unknown with not_granted, not off; Mutter hidden by Flatpak's bus proxy is not_granted; one deadline is shared by all compositor sources; reads are limited to the field groups in scope (image descriptions for compositor or hdr, RandR settings properties for compositor) — _why:_ gate review _(by claude)_
 - **2026-11-26** · note · RandR reads have no deadline of their own (libxcb replies block): a hung X server holds the reader thread, never the probe, which keeps its backend deadline — _why:_ accepted limitation; libxcb's fd can't be polled without unsafe code _(by claude)_
 - **2026-11-26** · action · Phase 5 fuzz run on the final code: 11 targets (new: compositor), 30 min each, about 297M executions, 0 crashes _(by claude)_
+- **2026-11-26** · approval · Approved the phase 5 gate; merge to main and start phase 6
