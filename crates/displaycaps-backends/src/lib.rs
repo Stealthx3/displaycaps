@@ -14,6 +14,7 @@
 //! compositor and decode layers report `unknown` with reason `not_implemented` until their
 //! backends exist (phases 4 to 6). Nothing outside the probe scope is read or reported.
 
+pub mod compositor;
 pub(crate) mod drm;
 mod environment;
 pub mod manifest;
@@ -47,6 +48,11 @@ pub mod fuzzing {
     /// A kernel uevent message.
     pub fn uevent(data: &[u8]) {
         let _ = crate::drm::uevent::parse(data);
+    }
+
+    /// Compositor facts JSON, through the compositor layer for a few DRM-like endpoints.
+    pub fn compositor(data: &[u8]) {
+        crate::compositor::fuzz(data);
     }
 
     /// An `HDR_OUTPUT_METADATA` blob.

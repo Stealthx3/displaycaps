@@ -1,0 +1,421 @@
+{
+  "wayland": {
+    "ok": {
+      "globals": [
+        {
+          "interface": "wl_compositor",
+          "version": 6
+        },
+        {
+          "interface": "wl_shm",
+          "version": 2
+        },
+        {
+          "interface": "wl_output",
+          "version": 4
+        },
+        {
+          "interface": "zxdg_output_manager_v1",
+          "version": 3
+        },
+        {
+          "interface": "wl_data_device_manager",
+          "version": 3
+        },
+        {
+          "interface": "xdg_toplevel_drag_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_primary_selection_device_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "wl_subcompositor",
+          "version": 1
+        },
+        {
+          "interface": "xdg_wm_base",
+          "version": 6
+        },
+        {
+          "interface": "gtk_shell1",
+          "version": 6
+        },
+        {
+          "interface": "wp_viewporter",
+          "version": 1
+        },
+        {
+          "interface": "wp_fractional_scale_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_pointer_gestures_v1",
+          "version": 3
+        },
+        {
+          "interface": "zwp_tablet_manager_v2",
+          "version": 1
+        },
+        {
+          "interface": "wl_seat",
+          "version": 8
+        },
+        {
+          "interface": "zwp_relative_pointer_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_pointer_constraints_v1",
+          "version": 1
+        },
+        {
+          "interface": "zxdg_exporter_v2",
+          "version": 1
+        },
+        {
+          "interface": "zxdg_importer_v2",
+          "version": 1
+        },
+        {
+          "interface": "zxdg_exporter_v1",
+          "version": 1
+        },
+        {
+          "interface": "zxdg_importer_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_linux_dmabuf_v1",
+          "version": 3
+        },
+        {
+          "interface": "wp_single_pixel_buffer_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_keyboard_shortcuts_inhibit_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_text_input_manager_v3",
+          "version": 1
+        },
+        {
+          "interface": "wp_presentation",
+          "version": 2
+        },
+        {
+          "interface": "xdg_activation_v1",
+          "version": 1
+        },
+        {
+          "interface": "zwp_idle_inhibit_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "xdg_wm_dialog_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_color_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "xdg_system_bell_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_drm_lease_device_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_commit_timing_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_fifo_manager_v1",
+          "version": 1
+        },
+        {
+          "interface": "wp_cursor_shape_manager_v1",
+          "version": 2
+        }
+      ],
+      "outputs": [
+        {
+          "version": 4,
+          "name": "Virtual-1",
+          "description": "Red Hat, Inc. 15\"",
+          "make": "RHT",
+          "model": "QEMU Monitor",
+          "mode": {
+            "width": 1280,
+            "height": 800,
+            "refresh_mhz": 74993,
+            "preferred": true
+          },
+          "scale": 1,
+          "image_description": {
+            "ok": {
+              "primaries_named": "srgb",
+              "primaries": [
+                640000,
+                330000,
+                300000,
+                600000,
+                150000,
+                60000,
+                312700,
+                329000
+              ],
+              "tf_named": "srgb",
+              "luminances": [
+                2000,
+                80,
+                80
+              ]
+            }
+          }
+        }
+      ],
+      "color_manager": {
+        "version": 1,
+        "features": [
+          "parametric",
+          "set_primaries",
+          "set_tf_power",
+          "set_luminances"
+        ],
+        "transfer_functions": [
+          "gamma22",
+          "gamma28",
+          "srgb",
+          "st2084_pq",
+          "bt1886",
+          "ext_linear"
+        ],
+        "primaries": [
+          "srgb",
+          "bt2020",
+          "ntsc"
+        ],
+        "intents": [
+          "perceptual"
+        ]
+      }
+    }
+  },
+  "mutter": {
+    "ok": {
+      "serial": 1,
+      "monitors": [
+        {
+          "connector": "Virtual-1",
+          "vendor": "RHT",
+          "product": "QEMU Monitor",
+          "serial": "sha256:a40a60478ece751e",
+          "modes": [
+            {
+              "id": "5120x2160@50.000",
+              "width": 5120,
+              "height": 2160,
+              "refresh": 50.0,
+              "preferred_scale": 2.7586207389831543
+            },
+            {
+              "id": "4096x2160@50.000",
+              "width": 4096,
+              "height": 2160,
+              "refresh": 50.0,
+              "preferred_scale": 2.6666667461395264
+            },
+            {
+              "id": "3840x2160@60.000",
+              "width": 3840,
+              "height": 2160,
+              "refresh": 60.0,
+              "preferred_scale": 2.2018349170684814
+            },
+            {
+              "id": "3840x2160@59.940",
+              "width": 3840,
+              "height": 2160,
+              "refresh": 59.940101623535156,
+              "preferred_scale": 2.2018349170684814
+            },
+            {
+              "id": "3840x2160@50.000",
+              "width": 3840,
+              "height": 2160,
+              "refresh": 50.0,
+              "preferred_scale": 2.2018349170684814
+            },
+            {
+              "id": "2560x1080@50.000",
+              "width": 2560,
+              "height": 1080,
+              "refresh": 50.0,
+              "preferred_scale": 1.4814814329147339
+            },
+            {
+              "id": "2048x1152@60.000",
+              "width": 2048,
+              "height": 1152,
+              "refresh": 60.0,
+              "preferred_scale": 1.2427184581756592
+            },
+            {
+              "id": "1920x1440@60.000",
+              "width": 1920,
+              "height": 1440,
+              "refresh": 60.0,
+              "preferred_scale": 1.25
+            },
+            {
+              "id": "1920x1200@59.885",
+              "width": 1920,
+              "height": 1200,
+              "refresh": 59.88460159301758,
+              "preferred_scale": 1.25
+            },
+            {
+              "id": "1920x1080@60.000",
+              "width": 1920,
+              "height": 1080,
+              "refresh": 60.0,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1920x1080@50.000",
+              "width": 1920,
+              "height": 1080,
+              "refresh": 50.0,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1856x1392@59.995",
+              "width": 1856,
+              "height": 1392,
+              "refresh": 59.995182037353516,
+              "preferred_scale": 1.2506738901138306
+            },
+            {
+              "id": "1792x1344@60.000",
+              "width": 1792,
+              "height": 1344,
+              "refresh": 59.99979019165039,
+              "preferred_scale": 1.251396656036377
+            },
+            {
+              "id": "1680x1050@59.954",
+              "width": 1680,
+              "height": 1050,
+              "refresh": 59.95425033569336,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1600x1200@60.000",
+              "width": 1600,
+              "height": 1200,
+              "refresh": 60.0,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1440x900@59.887",
+              "width": 1440,
+              "height": 900,
+              "refresh": 59.88744354248047,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1400x1050@59.978",
+              "width": 1400,
+              "height": 1050,
+              "refresh": 59.97844314575195,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1360x768@60.015",
+              "width": 1360,
+              "height": 768,
+              "refresh": 60.01516342163086,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1280x1024@60.020",
+              "width": 1280,
+              "height": 1024,
+              "refresh": 60.01974105834961,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1280x960@60.000",
+              "width": 1280,
+              "height": 960,
+              "refresh": 60.0,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1280x800@74.994",
+              "width": 1280,
+              "height": 800,
+              "refresh": 74.99385070800781,
+              "preferred_scale": 1.0,
+              "properties": {
+                "is-current": true,
+                "is-preferred": true
+              }
+            },
+            {
+              "id": "1280x768@59.870",
+              "width": 1280,
+              "height": 768,
+              "refresh": 59.8702278137207,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "1024x768@60.004",
+              "width": 1024,
+              "height": 768,
+              "refresh": 60.003841400146484,
+              "preferred_scale": 1.0
+            },
+            {
+              "id": "800x600@60.317",
+              "width": 800,
+              "height": 600,
+              "refresh": 60.3165397644043,
+              "preferred_scale": 1.0
+            }
+          ],
+          "properties": {
+            "color-mode": 0,
+            "display-name": "Red Hat, Inc. 15\"",
+            "is-builtin": false,
+            "is-for-lease": false,
+            "min-refresh-rate": 50,
+            "supported-color-modes": [
+              0
+            ]
+          }
+        }
+      ],
+      "logical_monitors": [
+        {
+          "scale": 1.0,
+          "transform": 0,
+          "primary": true,
+          "monitors": [
+            "Virtual-1"
+          ]
+        }
+      ],
+      "properties": {
+        "layout-mode": 1,
+        "supports-changing-layout-mode": true
+      }
+    }
+  }
+}

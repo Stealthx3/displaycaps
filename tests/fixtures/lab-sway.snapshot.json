@@ -61,9 +61,7 @@
     {
       "layer": "compositor",
       "availability": {
-        "state": "unknown",
-        "reason": "not_implemented",
-        "detail": "no backend for this layer yet"
+        "state": "read"
       }
     },
     {
@@ -191,6 +189,13 @@
           "id": {
             "kind": "sink_key",
             "key": "RHT-1234"
+          },
+          "confidence": "measured"
+        },
+        {
+          "id": {
+            "kind": "wl_output",
+            "name": "Virtual-1"
           },
           "confidence": "measured"
         }
@@ -1720,6 +1725,329 @@
               "state": "unknown",
               "reason": "not_exposed",
               "detail": "a virtual output has no link"
+            }
+          }
+        },
+        {
+          "layer": "compositor",
+          "availability": {
+            "state": "partial"
+          },
+          "caps": {
+            "modes": {
+              "state": "known",
+              "value": [
+                {
+                  "width": 1280,
+                  "height": 800,
+                  "refresh_millihz": 74994,
+                  "preferred": true,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 5120,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 4096,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 3840,
+                  "height": 2160,
+                  "refresh_millihz": 60000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 3840,
+                  "height": 2160,
+                  "refresh_millihz": 59940,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 3840,
+                  "height": 2160,
+                  "refresh_millihz": 50000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1440,
+                  "refresh_millihz": 60000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 2560,
+                  "height": 1080,
+                  "refresh_millihz": 50000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1856,
+                  "height": 1392,
+                  "refresh_millihz": 59995,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1792,
+                  "height": 1344,
+                  "refresh_millihz": 60000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 2048,
+                  "height": 1152,
+                  "refresh_millihz": 60000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1200,
+                  "refresh_millihz": 59885,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1080,
+                  "refresh_millihz": 60000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1920,
+                  "height": 1080,
+                  "refresh_millihz": 50000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1600,
+                  "height": 1200,
+                  "refresh_millihz": 60000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1680,
+                  "height": 1050,
+                  "refresh_millihz": 59954,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1400,
+                  "height": 1050,
+                  "refresh_millihz": 59978,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 1024,
+                  "refresh_millihz": 60020,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1440,
+                  "height": 900,
+                  "refresh_millihz": 59887,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 960,
+                  "refresh_millihz": 60000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1360,
+                  "height": 768,
+                  "refresh_millihz": 60015,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1280,
+                  "height": 768,
+                  "refresh_millihz": 59870,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 1024,
+                  "height": 768,
+                  "refresh_millihz": 60004,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 800,
+                  "height": 600,
+                  "refresh_millihz": 60317,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 640,
+                  "height": 480,
+                  "refresh_millihz": 60000,
+                  "sources": [
+                    "compositor"
+                  ]
+                },
+                {
+                  "width": 640,
+                  "height": 480,
+                  "refresh_millihz": 59940,
+                  "sources": [
+                    "compositor"
+                  ]
+                }
+              ],
+              "confidence": "measured",
+              "provenance": {
+                "layer": "compositor",
+                "source": {
+                  "kind": "wayland",
+                  "interface": "zwlr_output_head_v1",
+                  "event": "mode"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "hdr": {
+              "state": "unknown",
+              "reason": "not_exposed",
+              "detail": "the compositor states no HDR capability for this output"
+            }
+          },
+          "detail": {
+            "layer": "compositor",
+            "compositor": "wlroots",
+            "output_name": {
+              "state": "known",
+              "value": "Virtual-1",
+              "confidence": "measured",
+              "provenance": {
+                "layer": "compositor",
+                "source": {
+                  "kind": "derived",
+                  "from": "the compositor's output name"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "enabled": {
+              "state": "known",
+              "value": true,
+              "confidence": "measured",
+              "provenance": {
+                "layer": "compositor",
+                "source": {
+                  "kind": "wayland",
+                  "interface": "zwlr_output_head_v1",
+                  "event": "enabled"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "mode": {
+              "state": "known",
+              "value": {
+                "width": 1280,
+                "height": 800,
+                "refresh_millihz": 74994,
+                "preferred": true,
+                "sources": [
+                  "compositor"
+                ]
+              },
+              "confidence": "measured",
+              "provenance": {
+                "layer": "compositor",
+                "source": {
+                  "kind": "wayland",
+                  "interface": "zwlr_output_head_v1",
+                  "event": "current_mode"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "scale": {
+              "state": "known",
+              "value": 1.0,
+              "confidence": "measured",
+              "provenance": {
+                "layer": "compositor",
+                "source": {
+                  "kind": "wayland",
+                  "interface": "zwlr_output_head_v1",
+                  "event": "scale"
+                },
+                "read_at_ms": 1795262827698
+              }
+            },
+            "hdr_enabled": {
+              "state": "unknown",
+              "reason": "not_exposed",
+              "detail": "the compositor exposes no HDR state (no color-management-v1 image description)"
+            },
+            "vrr_policy": {
+              "state": "known",
+              "value": "never",
+              "confidence": "measured",
+              "provenance": {
+                "layer": "compositor",
+                "source": {
+                  "kind": "wayland",
+                  "interface": "zwlr_output_head_v1",
+                  "event": "adaptive_sync"
+                },
+                "read_at_ms": 1795262827698
+              }
             }
           }
         }

@@ -7,7 +7,7 @@ Crate boundaries as built. The design is in the development plan; this file trac
 | `displaycaps-model` | OS-neutral types and the versioned JSON schema: `Value<T>` with provenance and confidence, `ProbeScope`, display endpoints, sink record and identity (with the sink-key algorithm shared with AudioCaps), per-layer capability sets and state, presentation paths, effective sets, path reports, content requests, recommendations, findings, redaction | serde, schemars, sha2 | Schema v1 (phase 1) |
 | `displaycaps-parse` | Pure parsers over bytes and text, no I/O: EDID base block (`timing`, with `dmt`, `cvt`, `vic` tables), CTA-861 audio (copied from AudioCaps) and video (`cta_video`), DisplayID (`displayid`), SADs, PNP ids, os-release | — | EDID video parser (phase 2), checked against edid-decode and di-edid-decode by `scripts/edid-diff.sh` |
 | `displaycaps-link` | Pure link-budget maths: TMDS, FRL, DP, DSC, chroma and bit depth (`budget`), and the driver-like format choice with rejected options and reasons (`choose`) | model | Phase 4 |
-| `displaycaps-backends` | System access through `SystemRoot` (live `/` or a capture tree): runtime with per-backend deadlines, watch (manual, timer, DRM hotplug uevents, KMS change poll), environment and sandbox; `sink` builds the sink record from an EDID with quirk data; `drm` reads sysfs DRM (connectors, cached EDID, GPU, driver) and KMS through the `drm` crate's read-only ioctls (or a fixture's `drm_info -j`), and joins them into endpoints; Wayland, Mutter, RandR, VA-API and Vulkan backends arrive in phases 5–6 | model, parse, link, rules, drm, nix | Copied foundation (phase 1), sink record (phase 2), sysfs and KMS (phase 3) |
+| `displaycaps-backends` | System access through `SystemRoot` (live `/` or a capture tree): runtime with per-backend deadlines, watch (manual, timer, DRM hotplug uevents, KMS change poll), environment and sandbox; `sink` builds the sink record from an EDID with quirk data; `drm` reads sysfs DRM (connectors, cached EDID, GPU, driver) and KMS through the `drm` crate's read-only ioctls (or a fixture's `drm_info -j`), and joins them into endpoints; `compositor` reads the session's compositor (Wayland registry, `wl_output`, color-management-v1 image descriptions, wlr-output-management, `kde_output_device_v2`; Mutter's DisplayConfig over D-Bus; X11 RandR) into per-output facts (`compositor::facts`, also what captures save and fixtures replay) and attaches the compositor layer to the DRM endpoints; VA-API and Vulkan backends arrive in phase 6 | model, parse, link, rules, drm, nix, wayland-client and wayland-protocols (pure Rust), zbus, xcb (links libxcb) | Copied foundation (phase 1), sink record (phase 2), sysfs and KMS (phase 3), compositor (phase 5) |
 | `displaycaps-rules` | Declarative rule and quirk packs, bundled and overridable from `/etc/displaycaps/` or the app bundle | model | Engine copied (phase 1); starter rules in phase 7 |
 | `displaycaps-ffi` | The C ABI (`dc_*`, `libdisplaycaps.so.1`, `include/displaycaps.h` from cbindgen) | backends, rules | Pattern copied (phase 1); full ABI in phase 9 |
 | `displaycaps-cli` | `displaycaps` tool: probe, schema, passive capture | backends, rules | Phase 1 |
@@ -24,6 +24,18 @@ Crate boundaries as built. The design is in the development plan; this file trac
   Only the connectors in scope (and the CRTCs driving them) are read; the change poll is opt-in. Connectors are read with `GETCONNECTOR` and a one-mode stub
   (the kernel's cached state, as `drmModeGetConnectorCurrent` does), issued directly through `drm-ffi` so `count_modes` is never 0. No libdrm is linked: the
   pure-Rust `drm` crate makes the same ioctls without `unsafe` in this workspace.
+- **The compositor is read, never configured.** One Wayland client connection binds the output
+  protocols and only reads; the only objects it creates are an output's color-management object
+  and image description, to read the image description, and it destroys them. Mutter gets one
+  `GetCurrentState` call (only when its name has an owner, so nothing is activated). RandR uses
+  `GetScreenResourcesCurrent`, never `GetScreenResources` (a forced re-probe). Each output is
+  joined to its DRM connector by name (Mutter's and the modesetting driver's `HDMI-1` is
+  `HDMI-A-1`), with the sink's EDID identity for ties and renamed outputs (amdgpu's X driver);
+  an output that matches no connector becomes an endpoint `compositor-<name>`. Sources are
+  layered per field: Mutter's own API, then KWin's output device, then wlroots' heads, then the
+  color-management image description, then `wl_output`. HDR on wlroots without
+  color-management is `unknown`; on X11 it is `false` (no HDR output path).
+  `scripts/compositor-passive.sh` logs every request (WAYLAND_DEBUG, dbus-monitor, xtrace).
 - **Unknown, never unsupported.** A layer that can't be read (sandbox, missing library, no
   session) is `unknown` with a reason.
 - **Kept apart from AudioCaps.** Symbols `dc_*`, schema ids `displaycaps-*`, data paths

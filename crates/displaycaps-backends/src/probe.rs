@@ -4,9 +4,9 @@
 //! The scoped probe: runs the backends the scope asks for as tasks on the runtime's executor,
 //! each with its own deadline, and assembles a [`Snapshot`].
 //!
-//! Backends so far: environment, sysfs DRM (sink chain, host hardware, kernel driver) and
-//! read-only KMS. The link, compositor and decode layers report `unknown` with reason
-//! `not_implemented` until their phases. Nothing outside the scope is read: each backend runs only
+//! Backends so far: environment, sysfs DRM (sink chain, host hardware, kernel driver), read-only
+//! KMS (and the link inferred from it) and the compositor. The decode layer reports `unknown`
+//! with reason `not_implemented` until its phase. Nothing outside the scope is read: each backend runs only
 //! when one of its layers is in scope, and a layer outside the scope is not mentioned at all.
 
 use displaycaps_model::{
@@ -16,6 +16,7 @@ use displaycaps_model::{
 
 use std::collections::BTreeMap;
 
+use crate::compositor::{self, CompRead};
 use crate::drm::{self, KmsRead, SysRead};
 use crate::environment::{self, Env};
 use crate::root::SystemRoot;
@@ -41,6 +42,8 @@ struct Results {
     sysfs_timed_out: bool,
     kms: Option<KmsRead>,
     kms_timed_out: bool,
+    compositor: Option<CompRead>,
+    compositor_timed_out: bool,
 }
 
 /// The sysfs DRM backend: one step lists the tree and reads what the scope asks for.
@@ -118,6 +121,57 @@ impl Task<Results> for KmsTask<'_> {
     }
 }
 
+/// The compositor backend: a fixture's facts in one step; live, the first step starts the reader
+/// thread and later steps wait for it briefly, so the other backends keep running.
+struct CompositorTask {
+    access: Option<compositor::Access>,
+    budget: std::time::Duration,
+    rx: Option<std::sync::mpsc::Receiver<CompRead>>,
+    out: Option<CompRead>,
+}
+
+impl Task<Results> for CompositorTask {
+    fn backend(&self) -> Backend {
+        Backend::Compositor
+    }
+
+    fn step(&mut self) -> bool {
+        if let Some(rx) = &self.rx {
+            return match rx.recv_timeout(std::time::Duration::from_millis(1)) {
+                Ok(r) => {
+                    self.out = Some(r);
+                    true
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    self.out = Some(CompRead::Unreadable(
+                        UnknownReason::ReadError,
+                        "the compositor reader stopped".into(),
+                    ));
+                    true
+                }
+            };
+        }
+        match self.access.take() {
+            Some(compositor::Access::Fixture(r)) => {
+                self.out = Some(r);
+                true
+            }
+            Some(compositor::Access::Live(plan)) => {
+                self.rx = Some(compositor::start_live(plan, self.budget));
+                false
+            }
+            None => true,
+        }
+    }
+
+    fn finish(self: Box<Self>, out: &mut Results, timed_out: bool) {
+        out.compositor_timed_out = timed_out;
+        // A late result is dropped: the layer reports the timeout, not data past its deadline.
+        out.compositor = if timed_out { None } else { self.out };
+    }
+}
+
 /// The environment backend: one step reads everything.
 struct EnvTask<'a> {
     root: &'a SystemRoot,
@@ -171,9 +225,42 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
             out: None,
         }));
     }
+    let want = compositor::want(scope);
+    if want != compositor::Want::Nothing {
+        tasks.push(Box::new(CompositorTask {
+            access: Some({
+                let mut a = compositor::access(root, &env, want);
+                if let compositor::Access::Live(p) = &mut a {
+                    p.limit(scope);
+                }
+                a
+            }),
+            budget: opts
+                .deadline(Backend::Compositor)
+                .unwrap_or(std::time::Duration::from_secs(2)),
+            rx: None,
+            out: None,
+        }));
+    }
     runtime::run(tasks, opts, &mut res);
+    let comp = match res.compositor.take() {
+        Some(c) => Some(c),
+        None if res.compositor_timed_out => Some(CompRead::Unreadable(
+            UnknownReason::Timeout,
+            "compositor backend deadline".into(),
+        )),
+        None => None,
+    };
+    if let (Some(e), Some(CompRead::Facts(f))) = (&mut res.environment, &comp)
+        && let Some(s) = e.session.known_mut()
+        && let Some((info, protocols)) = compositor::identity(f)
+    {
+        s.compositor = Some(info);
+        s.protocols = protocols;
+    }
 
-    let (endpoints, mut drm_avail) = if drm::in_scope(scope) {
+    let mut edids: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    let (mut endpoints, mut drm_avail) = if drm::in_scope(scope) {
         let quirks = if scope.layers.includes(&LayerKind::SinkChain)
             || scope.layers.includes(&LayerKind::Link)
         {
@@ -182,6 +269,11 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
             Default::default()
         };
         let sys = res.sysfs.take().unwrap_or_default();
+        edids = sys
+            .edids
+            .iter()
+            .filter_map(|(k, v)| v.as_ref().ok().map(|b| (k.clone(), b.clone())))
+            .collect();
         let kms = match res.kms.take() {
             Some(k) => k,
             None if res.kms_timed_out => {
@@ -206,6 +298,16 @@ pub(crate) fn probe_inner(root: &SystemRoot, scope: &ProbeScope, opts: &ProbeOpt
                 };
             }
         }
+    }
+
+    if scope.layers.includes(&LayerKind::Compositor) {
+        let read = comp.unwrap_or(CompRead::Unreadable(
+            UnknownReason::Timeout,
+            "compositor backend did not run".into(),
+        ));
+        let a = compositor::attach(&mut endpoints, &edids, &read, scope, now);
+        drm_avail.insert(LayerKind::Compositor, a);
+        endpoints.sort_by(|a, b| a.id.cmp(&b.id));
     }
 
     let layers = LayerKind::ALL
@@ -357,13 +459,21 @@ mod tests {
                         ..
                     },
                 ) => {}
+                // No compositor facts in the fixture.
                 (
-                    _,
+                    LayerKind::Compositor,
+                    Availability::Unknown {
+                        reason: UnknownReason::NotExposed,
+                        ..
+                    },
+                ) => {}
+                (
+                    LayerKind::Decode,
                     Availability::Unknown {
                         reason: UnknownReason::NotImplemented,
                         ..
                     },
-                ) if matches!(l, LayerKind::Compositor | LayerKind::Decode) => {}
+                ) => {}
                 (l, a) => panic!("{l:?}: {a:?}"),
             }
         }
@@ -404,7 +514,8 @@ mod tests {
                 LayerKind::HostHardware,
                 LayerKind::KernelDriver,
                 LayerKind::Kms,
-                LayerKind::Link
+                LayerKind::Link,
+                LayerKind::Compositor
             ]
         );
         // A virtual output: the link is virtual, worked out from the KMS mode.

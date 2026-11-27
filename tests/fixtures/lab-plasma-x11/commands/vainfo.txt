@@ -1,0 +1,2 @@
+Trying display: wayland
+Trying display: x11

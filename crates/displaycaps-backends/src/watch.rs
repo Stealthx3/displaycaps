@@ -10,8 +10,9 @@
 //! - DRM hotplug uevents (live system, when a DRM layer is in scope);
 //! - KMS changes (mode, HDR metadata, VRR, properties), noticed by re-reading KMS every
 //!   [`crate::runtime::ProbeOptions::kms_poll_interval`] (live system inside a display session,
-//!   when the KMS layer is in scope). The kernel announces these only to the compositor; the
-//!   compositor's own events arrive with its backend in phase 5.
+//!   when the KMS layer is in scope). The kernel announces these only to the compositor;
+//! - compositor output events (live system inside a display session, when the compositor layer
+//!   is in scope): the Wayland output protocols' events, or RandR change notifications on X11.
 //!
 //! Only the watched scope is re-probed. Event sources only receive or read; none changes state.
 
@@ -40,6 +41,9 @@ pub enum Cause {
     Hotplug,
     /// KMS state changed (mode, HDR metadata, VRR or another property).
     KmsChange,
+    /// The compositor reported an output change (mode, scale, HDR or another setting, or an
+    /// output added or removed).
+    CompositorChange,
 }
 
 /// One update.
@@ -281,6 +285,7 @@ mod sources {
         ) {
             let env = Env::for_probe(&SystemRoot::Live, opts);
             let scope = scope.clone();
+            let (tx, stop) = (tx.clone(), stop.clone());
             let every = every.max(POLL);
             if let Ok(h) = thread::Builder::new()
                 .name("displaycaps-kms-poll".into())
@@ -305,6 +310,12 @@ mod sources {
                     }
                 })
             {
+                handles.push(h);
+            }
+        }
+        if scope.layers.includes(&LayerKind::Compositor) {
+            let env = Env::for_probe(&SystemRoot::Live, opts);
+            if let Some(h) = crate::compositor::watch_source(&env, tx.clone(), stop.clone(), POLL) {
                 handles.push(h);
             }
         }

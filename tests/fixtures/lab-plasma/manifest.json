@@ -82,6 +82,14 @@
       ],
       "exit_code": 0,
       "output_file": "vulkaninfo.txt"
+    },
+    {
+      "name": "displaycaps-compositor",
+      "argv": [
+        "(in-process)"
+      ],
+      "exit_code": 0,
+      "output_file": "displaycaps-compositor.json"
     }
   ],
   "redaction": [
@@ -92,5 +100,7 @@
     "EDID numeric serial and serial descriptor cleared, checksum fixed",
     "DMI serials, product UUID and USB serial attributes are never collected"
   ],
-  "notes": []
+  "notes": [
+    "displaycaps-compositor.json added 2026-11-26 from the same lab desktop (phase 5), same default output settings"
+  ]
 }

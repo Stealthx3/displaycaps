@@ -30,6 +30,13 @@ expect-test = "1"
 nix = { version = "0.31", default-features = false, features = ["poll", "socket", "uio"] }
 drm = "0.15"
 drm-ffi = "0.9"
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-protocols-plasma = { version = "0.3", features = ["client"] }
+zbus = "6.2"
+zruntime = "0.2"
+xcb = { version = "1.7", features = ["randr"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

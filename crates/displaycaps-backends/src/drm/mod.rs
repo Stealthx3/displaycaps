@@ -50,7 +50,9 @@ pub(crate) fn link_in_scope(scope: &ProbeScope) -> bool {
 
 /// Whether the scope needs the DRM backends at all.
 pub(crate) fn in_scope(scope: &ProbeScope) -> bool {
+    // The compositor layer is attached to the DRM connectors, so it needs their list.
     ENDPOINT_LAYERS.iter().any(|l| scope.layers.includes(l))
+        || scope.layers.includes(&LayerKind::Compositor)
 }
 
 /// The sysfs tree: cards and connectors, or why `/sys/class/drm` couldn't be listed.
@@ -441,7 +443,11 @@ pub(crate) fn read_sysfs(root: &SystemRoot, scope: &ProbeScope) -> SysRead {
     let mut out = SysRead::default();
     let tree = sysfs::scan(root).map_err(|e| (io_reason(&e), format!("{}: {e}", sysfs::CLASS)));
     if let Ok((cards, conns)) = &tree {
-        if scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope) || link_in_scope(scope)
+        // The compositor layer uses the EDID only to join outputs to connectors; it is not reported
+        // unless the sink layer is in scope.
+        if scope.layers.includes(&LayerKind::SinkChain) && wants_sink(scope)
+            || link_in_scope(scope)
+            || scope.layers.includes(&LayerKind::Compositor)
         {
             for c in conns.iter().filter(|c| connector_in_scope(scope, c)) {
                 if c.status == Some(ConnectionStatus::Connected) {

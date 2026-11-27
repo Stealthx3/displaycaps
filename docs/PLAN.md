@@ -49,11 +49,11 @@ Open items (not phase tasks):
 
 ## Phase 5 — Compositors and X11 (about 4 weeks)
 
-- [ ] **5.1** Wayland core outputs and color-management-v1 output image descriptions
-- [ ] **5.2** wlr-output-management and KDE output device
-- [ ] **5.3** Mutter DisplayConfig over D-Bus
-- [ ] **5.4** X11 RandR fallback
-- [ ] **5.5** Gate: matches KWin, GNOME and Sway settings in the lab
+- [x] **5.1** Wayland core outputs and color-management-v1 output image descriptions
+- [x] **5.2** wlr-output-management and KDE output device
+- [x] **5.3** Mutter DisplayConfig over D-Bus
+- [x] **5.4** X11 RandR fallback
+- [x] **5.5** Gate: matches KWin, GNOME and Sway settings in the lab (also Plasma on Xorg; HDR, VRR and RGB-range switches by unit tests only: the virtual display has none)
 
 ## Phase 6 — Decode layer, opt-in (about 2 weeks)
 
